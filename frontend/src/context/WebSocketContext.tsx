@@ -37,11 +37,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
     const stompClient = new Client({
       webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      reconnectDelay: 5000,
       connectHeaders: {
         Authorization: `Bearer ${token}`
-      },
-      debug: (str) => {
-        console.log(str);
       },
       onConnect: () => {
         setIsConnected(true);
