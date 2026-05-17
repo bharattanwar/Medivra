@@ -9,6 +9,7 @@ import com.app.payment.entity.Payment;
 import com.app.payment.entity.PaymentStatus;
 import com.app.payment.entity.RefundStatus;
 import com.app.payment.repository.PaymentRepository;
+import com.app.chat.service.ChatService;
 import com.razorpay.Order;
 import com.razorpay.Refund;
 import org.springframework.stereotype.Service;
@@ -28,15 +29,18 @@ public class PaymentService {
     private final AppointmentRepository appointmentRepository;
     private final RazorpayService razorpayService;
     private final RazorpayProperties razorpayProperties;
+    private final ChatService chatService;
 
     public PaymentService(PaymentRepository paymentRepository,
                           AppointmentRepository appointmentRepository,
                           RazorpayService razorpayService,
-                          RazorpayProperties razorpayProperties) {
+                          RazorpayProperties razorpayProperties,
+                          ChatService chatService) {
         this.paymentRepository = paymentRepository;
         this.appointmentRepository = appointmentRepository;
         this.razorpayService = razorpayService;
         this.razorpayProperties = razorpayProperties;
+        this.chatService = chatService;
     }
 
     @Transactional
@@ -147,6 +151,9 @@ public class PaymentService {
 
         appointment.setStatus(AppointmentStatus.CONFIRMED);
         appointmentRepository.save(appointment);
+        
+        // Trigger chat creation
+        chatService.createConversation(appointment.getId());
 
         return mapToResponse(payment);
     }

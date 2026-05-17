@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { processConsultationPayment } from '../components/PaymentCheckout';
+import ChatWindow from '../components/chat/ChatWindow';
 
 interface Appointment {
   id: string;
@@ -16,6 +17,7 @@ const MyAppointments: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [activeChat, setActiveChat] = useState<{ conversationId: string, doctorName: string, doctorId: string } | null>(null);
 
   useEffect(() => {
     fetchAppointments();
@@ -78,6 +80,22 @@ const MyAppointments: React.FC = () => {
       });
     } finally {
       setPayingId(null);
+    }
+  };
+
+  const handleStartConsultation = async (apt: Appointment) => {
+    try {
+      const res = await api.get(`/chat/appointment/${apt.id}`);
+      if (res.data && res.data.id) {
+        setActiveChat({
+          conversationId: res.data.id,
+          doctorName: apt.doctorName,
+          doctorId: res.data.doctorId
+        });
+      }
+    } catch (error) {
+      console.error('Failed to start consultation', error);
+      alert('Could not start consultation. Has the chat been initialized?');
     }
   };
 
@@ -148,12 +166,20 @@ const MyAppointments: React.FC = () => {
                     </button>
                   )}
                   {apt.status === 'CONFIRMED' && (
-                    <button
-                      onClick={() => handleViewPrescription(apt.id)}
-                      className="text-blue-600 font-bold text-sm hover:underline"
-                    >
-                      View Prescription
-                    </button>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        onClick={() => handleViewPrescription(apt.id)}
+                        className="text-blue-600 font-bold text-sm hover:underline"
+                      >
+                        View Prescription
+                      </button>
+                      <button
+                        onClick={() => handleStartConsultation(apt)}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700"
+                      >
+                        💬 Start Consultation
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -173,6 +199,15 @@ const MyAppointments: React.FC = () => {
           </div>
         )}
       </div>
+
+      {activeChat && (
+        <ChatWindow 
+          conversationId={activeChat.conversationId}
+          otherPartyName={`Dr. ${activeChat.doctorName}`}
+          otherPartyId={activeChat.doctorId}
+          onClose={() => setActiveChat(null)}
+        />
+      )}
     </div>
   );
 };

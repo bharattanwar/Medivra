@@ -39,6 +39,10 @@
 			<groupId>com.app</groupId>
 			<artifactId>payment-module</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>chat-module</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import UploadPrescriptionModal from '../components/UploadPrescriptionModal';
+import ChatWindow from '../components/chat/ChatWindow';
 
 interface Appointment {
   id: string;
@@ -18,6 +19,7 @@ const DoctorAppointments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [activeChat, setActiveChat] = useState<{ conversationId: string, patientName: string, patientId: string } | null>(null);
 
   useEffect(() => {
     fetchAppointments();
@@ -43,6 +45,22 @@ const DoctorAppointments: React.FC = () => {
     setSuccessMessage('Prescription uploaded successfully!');
     fetchAppointments();
     setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleStartConsultation = async (apt: Appointment) => {
+    try {
+      const res = await api.get(`/chat/appointment/${apt.id}`);
+      if (res.data && res.data.id) {
+        setActiveChat({
+          conversationId: res.data.id,
+          patientName: apt.patientName,
+          patientId: res.data.patientId
+        });
+      }
+    } catch (error) {
+      console.error('Failed to start consultation', error);
+      alert('Could not start consultation. Has the chat been initialized?');
+    }
   };
 
   return (
@@ -89,7 +107,15 @@ const DoctorAppointments: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 w-full lg:w-auto">
+                <div className="flex flex-col lg:flex-row items-center gap-3 w-full lg:w-auto">
+                  {apt.status === 'CONFIRMED' && (
+                    <button 
+                      onClick={() => handleStartConsultation(apt)}
+                      className="flex-1 lg:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
+                    >
+                      💬 Start Consultation
+                    </button>
+                  )}
                   <button 
                     onClick={() => setSelectedAppointment(apt)}
                     className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
@@ -118,6 +144,15 @@ const DoctorAppointments: React.FC = () => {
             doctorId={selectedAppointment.doctorId}
             onClose={() => setSelectedAppointment(null)}
             onSuccess={handleUploadSuccess}
+          />
+        )}
+
+        {activeChat && (
+          <ChatWindow 
+            conversationId={activeChat.conversationId}
+            otherPartyName={activeChat.patientName}
+            otherPartyId={activeChat.patientId}
+            onClose={() => setActiveChat(null)}
           />
         )}
       </div>

@@ -7,8 +7,8 @@
 		<artifactId>medivra-parent</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
-	<artifactId>payment-module</artifactId>
-	<name>payment-module</name>
+	<artifactId>chat-module</artifactId>
+	<name>chat-module</name>
 
 	<dependencies>
 		<dependency>
@@ -32,14 +32,8 @@
 			<artifactId>auth-module</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.razorpay</groupId>
-			<artifactId>razorpay-java</artifactId>
-			<version>1.4.6</version>
-		</dependency>
-		<dependency>
-			<groupId>com.app</groupId>
-			<artifactId>chat-module</artifactId>
-			<version>${project.version}</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
 	</dependencies>
 </project>
