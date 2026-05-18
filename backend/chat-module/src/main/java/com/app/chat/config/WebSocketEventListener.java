@@ -19,7 +19,7 @@ public class WebSocketEventListener {
     private final PresenceService presenceService;
     private final UserRepository userRepository;
 
-    public WebSocketEventListener(PresenceService presenceService, UserRepository userRepository) {
+    public WebSocketEventListener(PresenceService presenceService,UserRepository userRepository) {
         this.presenceService = presenceService;
         this.userRepository = userRepository;
     }
@@ -27,16 +27,14 @@ public class WebSocketEventListener {
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
-        
-        if (headerAccessor.getUser() instanceof UsernamePasswordAuthenticationToken) {
-            UsernamePasswordAuthenticationToken authentication = (UsernamePasswordAuthenticationToken) headerAccessor.getUser();
-            if (authentication.getPrincipal() instanceof UserDetails) {
-                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-                Optional<User> userOpt = userRepository.findByEmail(userDetails.getUsername());
+        if (headerAccessor.getUser()
+            instanceof UsernamePasswordAuthenticationToken authentication) {
+            if (authentication.getPrincipal()
+                instanceof UserDetails userDetails) {
+                Optional<User> userOpt =userRepository.findByEmail(userDetails.getUsername());
                 userOpt.ifPresent(user -> {
-                    // Set UUID in session attributes so we can retrieve it on disconnect
-                    headerAccessor.getSessionAttributes().put("user_id", user.getId());
-                    presenceService.handleUserConnect(user.getId());
+                System.out.println("User connected: " + user.getEmail());
+                presenceService.handleUserConnect(user.getId());
                 });
             }
         }
@@ -44,10 +42,6 @@ public class WebSocketEventListener {
 
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
-        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
-        if (headerAccessor.getSessionAttributes() != null && headerAccessor.getSessionAttributes().containsKey("user_id")) {
-            java.util.UUID userId = (java.util.UUID) headerAccessor.getSessionAttributes().get("user_id");
-            presenceService.handleUserDisconnect(userId);
-        }
+        System.out.println("User disconnected");
     }
 }
