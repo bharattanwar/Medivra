@@ -65,7 +65,6 @@ public class ChatService {
     public MessageResponse sendMessage(SendMessageRequest request, UUID senderId) {
         Conversation conversation = conversationRepository.findById(request.getConversationId())
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
-        System.out.println("INSIDE sendMessage()");
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
@@ -85,7 +84,6 @@ public class ChatService {
         String recipientEmail = senderId.equals(conversation.getPatient().getId())
         ? conversation.getDoctor().getUser().getEmail()
         : conversation.getPatient().getEmail();
-        System.out.println("Sending WS message to: " + recipientEmail);
 
         messagingTemplate.convertAndSendToUser(
             recipientEmail,
@@ -98,7 +96,6 @@ public class ChatService {
             "/queue/messages",
             response    
         );
-        System.out.println("WS MESSAGE SENT");
         return response;
     }
 
