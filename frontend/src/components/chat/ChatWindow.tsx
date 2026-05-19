@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ChatInput from './ChatInput';
 import MessageBubble from './MessageBubble';
 import { useWebSocket } from '../../context/WebSocketContext';
+import api from '../../services/api';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -14,14 +15,39 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, otherPartyName,
   const { messages, presence, isConnected } = useWebSocket();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // In a real app we'd get our own userId from auth context
+  // Get our own userId from local storage
   const currentUserId = localStorage.getItem('userId') || ''; 
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
 
-  const conversationMessages = messages.filter(m => m.conversationId === conversationId);
+  // Fetch historical messages
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await api.get(`/chat/conversations/${conversationId}/messages`);
+        setChatMessages(response.data);
+      } catch (err) {
+        console.error('Failed to fetch chat history:', err);
+      }
+    };
+    fetchHistory();
+  }, [conversationId]);
+
+  // Sync with live messages from WebSocket without duplication
+  useEffect(() => {
+    const liveMessages = messages.filter(m => m.conversationId === conversationId);
+    setChatMessages(prev => {
+      const existingIds = new Set(prev.map(m => m.id));
+      const newMessages = liveMessages.filter(m => !existingIds.has(m.id));
+      if (newMessages.length > 0) {
+        return [...prev, ...newMessages];
+      }
+      return prev;
+    });
+  }, [messages, conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversationMessages]);
+  }, [chatMessages]);
 
   const isOnline = presence[otherPartyId] === 'ONLINE';
 
@@ -53,18 +79,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, otherPartyName,
             Reconnecting to chat...
           </div>
         )}
-        {conversationMessages.length === 0 ? (
+        {chatMessages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-400 text-sm">
             Send a message to start the consultation.
           </div>
         ) : (
-          conversationMessages.map((msg, index) => (
-            <MessageBubble 
-              key={index} 
-              message={msg} 
-              isOwn={msg.senderId === currentUserId} 
-            />
-          ))
+          chatMessages.map((msg, index) => {
+            const isOwn = (msg.senderId && currentUserId && msg.senderId.toLowerCase() === currentUserId.toLowerCase()) || 
+                          (msg.senderId && otherPartyId && msg.senderId.toLowerCase() !== otherPartyId.toLowerCase());
+            return (
+              <MessageBubble 
+                key={index} 
+                message={msg} 
+                isOwn={!!isOwn} 
+              />
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>

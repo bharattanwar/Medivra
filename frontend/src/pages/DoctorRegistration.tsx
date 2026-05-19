@@ -63,9 +63,12 @@ const DoctorRegistration = () => {
       };
 
       const response = await api.post('/doctors/register', payload);
-      const { token, role } = response.data.data;
+      const { token, role, userId } = response.data.data;
       localStorage.setItem('token', token);
       localStorage.setItem('role', role);
+      if (userId) {
+        localStorage.setItem('userId', userId);
+      }
       navigate('/dashboard');
     } catch (err: any) {
       const message = err.response?.data?.message || 'Registration failed. Please try again.';
