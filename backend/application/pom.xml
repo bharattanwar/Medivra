@@ -43,6 +43,10 @@
 			<groupId>com.app</groupId>
 			<artifactId>chat-module</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>notification-module</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>

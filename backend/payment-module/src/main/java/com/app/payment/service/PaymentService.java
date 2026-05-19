@@ -10,8 +10,11 @@ import com.app.payment.entity.PaymentStatus;
 import com.app.payment.entity.RefundStatus;
 import com.app.payment.repository.PaymentRepository;
 import com.app.chat.service.ChatService;
+import com.app.common.event.NotificationEvent;
+import com.app.common.entity.NotificationType;
 import com.razorpay.Order;
 import com.razorpay.Refund;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,17 +33,20 @@ public class PaymentService {
     private final RazorpayService razorpayService;
     private final RazorpayProperties razorpayProperties;
     private final ChatService chatService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentService(PaymentRepository paymentRepository,
                           AppointmentRepository appointmentRepository,
                           RazorpayService razorpayService,
                           RazorpayProperties razorpayProperties,
-                          ChatService chatService) {
+                          ChatService chatService,
+                          ApplicationEventPublisher eventPublisher) {
         this.paymentRepository = paymentRepository;
         this.appointmentRepository = appointmentRepository;
         this.razorpayService = razorpayService;
         this.razorpayProperties = razorpayProperties;
         this.chatService = chatService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -154,6 +160,35 @@ public class PaymentService {
         
         // Trigger chat creation
         chatService.createConversation(appointment.getId());
+
+        // Publish notifications
+        try {
+            // 1. Notify Patient of successful payment and confirmation
+            eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                appointment.getPatient().getId(),
+                "Payment Successful",
+                String.format("Your payment of ₹%s for Dr. %s was verified. Appointment is confirmed.", 
+                    payment.getAmount().toString(), 
+                    appointment.getDoctor().getUser().getFullName()),
+                NotificationType.PAYMENT_SUCCESS,
+                payment.getId().toString()
+            ));
+
+            // 2. Notify Doctor of appointment confirmation
+            eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                appointment.getDoctor().getUserId(),
+                "Appointment Confirmed (Paid)",
+                String.format("Patient %s has completed their payment. The appointment for %s is confirmed.", 
+                    appointment.getPatient().getFullName(), 
+                    appointment.getAppointmentDate().toString()),
+                NotificationType.APPOINTMENT_CONFIRMED,
+                appointment.getId().toString()
+            ));
+        } catch (Exception e) {
+            System.err.println("Failed to publish payment success notifications: " + e.getMessage());
+        }
 
         return mapToResponse(payment);
     }

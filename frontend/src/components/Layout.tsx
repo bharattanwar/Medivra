@@ -1,5 +1,8 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useWebSocket } from '../context/WebSocketContext';
+import NotificationBell from './NotificationBell';
+import { X, Calendar, CreditCard, FileText, Sparkles } from 'lucide-react';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
@@ -7,6 +10,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   const isDoctor = role === 'DOCTOR';
+
+  const { toasts, removeToast } = useWebSocket();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -29,7 +34,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     : '/login';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 relative">
       <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -70,9 +75,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       </Link>
                     </>
                   )}
+                  
+                  {/* Real-time Notification Bell Center */}
+                  <div className="ml-2 mr-1">
+                    <NotificationBell />
+                  </div>
+
                   <button
                     onClick={handleLogout}
-                    className="ml-2 px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
+                    className="ml-2 px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
                   >
                     Logout
                   </button>
@@ -99,6 +110,66 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </header>
 
       <main className="flex-1 flex flex-col">{children}</main>
+
+      {/* Real-Time Toast Popup Container */}
+      <div className="fixed top-20 right-6 z-50 flex flex-col gap-3 pointer-events-none w-80 max-w-[90vw]">
+        {toasts.map((toast) => {
+          const getToastIcon = (type: string) => {
+            switch (type) {
+              case 'APPOINTMENT_BOOKED':
+              case 'APPOINTMENT_CONFIRMED':
+                return <Calendar className="w-5 h-5 text-blue-600" />;
+              case 'PAYMENT_SUCCESS':
+                return <CreditCard className="w-5 h-5 text-green-600" />;
+              case 'PRESCRIPTION_UPLOADED':
+                return <FileText className="w-5 h-5 text-purple-600" />;
+              default:
+                return <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />;
+            }
+          };
+
+          const getToastBg = (type: string) => {
+            switch (type) {
+              case 'APPOINTMENT_BOOKED':
+              case 'APPOINTMENT_CONFIRMED':
+                return 'bg-blue-50/95 border-blue-100';
+              case 'PAYMENT_SUCCESS':
+                return 'bg-green-50/95 border-green-100';
+              case 'PRESCRIPTION_UPLOADED':
+                return 'bg-purple-50/95 border-purple-100';
+              default:
+                return 'bg-amber-50/95 border-amber-100';
+            }
+          };
+
+          return (
+            <div
+              key={toast.id}
+              className={`pointer-events-auto p-4 rounded-2xl shadow-2xl border flex items-start space-x-3 w-full bg-white/95 backdrop-blur-md transform transition-all duration-300 animate-in slide-in-from-right-10 ${getToastBg(
+                toast.type
+              )}`}
+            >
+              <div className="shrink-0 p-2 bg-white rounded-xl shadow-sm border border-slate-100">
+                {getToastIcon(toast.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  {toast.title}
+                </p>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  {toast.message}
+                </p>
+              </div>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

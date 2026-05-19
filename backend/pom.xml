@@ -29,6 +29,7 @@
 		<module>record-module</module>
 		<module>payment-module</module>
 		<module>chat-module</module>
+		<module>notification-module</module>
 		<module>application</module>
 	</modules>
 
@@ -72,6 +73,11 @@
 			<dependency>
 				<groupId>com.app</groupId>
 				<artifactId>chat-module</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.app</groupId>
+				<artifactId>notification-module</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

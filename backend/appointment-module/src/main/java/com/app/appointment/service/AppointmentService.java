@@ -9,6 +9,9 @@ import com.app.doctor.entity.Doctor;
 import com.app.doctor.repository.DoctorRepository;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
+import com.app.common.event.NotificationEvent;
+import com.app.common.entity.NotificationType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +25,16 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final DoctorRepository doctorRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               DoctorRepository doctorRepository,
-                              UserRepository userRepository) {
+                              UserRepository userRepository,
+                              ApplicationEventPublisher eventPublisher) {
         this.appointmentRepository = appointmentRepository;
         this.doctorRepository = doctorRepository;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -47,6 +53,24 @@ public class AppointmentService {
         appointment.setStatus(AppointmentStatus.PENDING);
 
         Appointment savedAppointment = appointmentRepository.save(appointment);
+
+        // Publish appointment booked notification for the Doctor
+        try {
+            eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                doctor.getUserId(),
+                "New Appointment Request",
+                String.format("You have a new appointment booking request from %s for %s at %s.", 
+                    patient.getFullName(), 
+                    savedAppointment.getAppointmentDate().toString(), 
+                    savedAppointment.getTimeSlot()),
+                NotificationType.APPOINTMENT_BOOKED,
+                savedAppointment.getId().toString()
+            ));
+        } catch (Exception e) {
+            System.err.println("Failed to publish AppointmentBooked event: " + e.getMessage());
+        }
+
         return mapToResponse(savedAppointment);
     }
 
