@@ -94,6 +94,13 @@ public class AppointmentService {
         return getAppointmentsByDoctor(doctor.getId());
     }
 
+    public AppointmentResponse getAppointmentById(UUID id) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+        return mapToResponse(appointment);
+    }
+
+
     private AppointmentResponse mapToResponse(Appointment appointment) {
         AppointmentResponse response = new AppointmentResponse();
         response.setId(appointment.getId());

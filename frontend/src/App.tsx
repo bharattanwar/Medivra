@@ -9,6 +9,7 @@ import MyAppointments from './pages/MyAppointments';
 import ManageAvailability from './pages/ManageAvailability';
 import DoctorAppointments from './pages/DoctorAppointments';
 import PaymentHistory from './pages/PaymentHistory';
+import ConsultationRoom from './pages/ConsultationRoom';
 
 import { WebSocketProvider } from './context/WebSocketContext';
 
@@ -28,6 +29,7 @@ function App() {
             <Route path="/patient/payments" element={<PaymentHistory />} />
             <Route path="/doctor/availability" element={<ManageAvailability />} />
             <Route path="/doctor/appointments" element={<DoctorAppointments />} />
+            <Route path="/consultation/:appointmentId" element={<ConsultationRoom />} />
           </Routes>
         </Layout>
       </Router>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import UploadPrescriptionModal from '../components/UploadPrescriptionModal';
 import ChatWindow from '../components/chat/ChatWindow';
@@ -15,6 +16,7 @@ interface Appointment {
 }
 
 const DoctorAppointments: React.FC = () => {
+  const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -109,16 +111,24 @@ const DoctorAppointments: React.FC = () => {
 
                 <div className="flex flex-col lg:flex-row items-center gap-3 w-full lg:w-auto">
                   {apt.status === 'CONFIRMED' && (
-                    <button 
-                      onClick={() => handleStartConsultation(apt)}
-                      className="flex-1 lg:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
-                    >
-                      💬 Start Consultation
-                    </button>
+                    <>
+                      <button 
+                        onClick={() => handleStartConsultation(apt)}
+                        className="flex-1 lg:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
+                      >
+                        💬 Start Consultation
+                      </button>
+                      <button 
+                        onClick={() => navigate(`/consultation/${apt.id}`)}
+                        className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        📹 Join Video Call
+                      </button>
+                    </>
                   )}
                   <button 
                     onClick={() => setSelectedAppointment(apt)}
-                    className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
+                    className="flex-1 lg:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
                   >
                     Upload Prescription
                   </button>

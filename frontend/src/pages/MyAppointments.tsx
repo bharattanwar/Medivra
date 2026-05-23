@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { processConsultationPayment } from '../components/PaymentCheckout';
 import ChatWindow from '../components/chat/ChatWindow';
@@ -14,6 +15,7 @@ interface Appointment {
 }
 
 const MyAppointments: React.FC = () => {
+  const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -175,9 +177,15 @@ const MyAppointments: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleStartConsultation(apt)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700"
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700 w-full"
                       >
                         💬 Start Consultation
+                      </button>
+                      <button
+                        onClick={() => navigate(`/consultation/${apt.id}`)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-1.5"
+                      >
+                        📹 Join Video Call
                       </button>
                     </div>
                   )}
