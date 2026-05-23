@@ -31,6 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+application-local.yml
 
 ### Local secrets ###
+.env
+.env.local
+.env.*.local
+*.env
 backend/.env.local
