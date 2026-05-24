@@ -143,4 +143,15 @@ public class Doctor extends BaseEntity {
     public void setAvailable(Boolean available) {
         isAvailable = available;
     }
+
+    @Column(name = "is_approved", nullable = false)
+    private Boolean isApproved = false;
+
+    public Boolean isApproved() {
+        return isApproved;
+    }
+
+    public void setApproved(Boolean approved) {
+        isApproved = approved;
+    }
 }

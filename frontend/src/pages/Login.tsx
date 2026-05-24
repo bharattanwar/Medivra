@@ -23,7 +23,9 @@ const Login = () => {
       localStorage.setItem('role', role);
       localStorage.setItem('userId', userId);
 
-      if (role === 'DOCTOR') {
+      if (role === 'ADMIN') {
+        navigate('/admin/dashboard');
+      } else if (role === 'DOCTOR') {
         navigate('/dashboard');
       } else {
         navigate('/patient/dashboard');

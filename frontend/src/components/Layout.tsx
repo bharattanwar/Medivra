@@ -28,7 +28,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     }`;
 
   const homePath = token
-    ? isDoctor
+    ? role === 'ADMIN'
+      ? '/admin/dashboard'
+      : isDoctor
       ? '/dashboard'
       : '/patient/dashboard'
     : '/login';
@@ -50,7 +52,22 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <nav className="flex items-center gap-1 sm:gap-2">
               {token ? (
                 <>
-                  {isDoctor ? (
+                  {role === 'ADMIN' ? (
+                    <>
+                      <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>
+                        Dashboard
+                      </Link>
+                      <Link to="/admin/users" className={navLinkClass('/admin/users')}>
+                        Users
+                      </Link>
+                      <Link to="/admin/doctors" className={navLinkClass('/admin/doctors')}>
+                        Doctors Approval
+                      </Link>
+                      <Link to="/admin/appointments" className={navLinkClass('/admin/appointments')}>
+                        Appointments/Payments
+                      </Link>
+                    </>
+                  ) : isDoctor ? (
                     <>
                       <Link to="/dashboard" className={navLinkClass('/dashboard')}>
                         Dashboard

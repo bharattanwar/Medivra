@@ -37,6 +37,10 @@ public class UserService implements UserDetailsService {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
 
+        if (Boolean.TRUE.equals(user.isBlocked())) {
+            throw new RuntimeException("Your account has been blocked by the admin.");
+        }
+
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
                 user.getPassword(),
@@ -73,6 +77,10 @@ public class UserService implements UserDetailsService {
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+
+        if (Boolean.TRUE.equals(user.isBlocked())) {
+            throw new RuntimeException("Your account has been blocked by the admin.");
+        }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid email or password");

@@ -52,4 +52,15 @@ public class User extends BaseEntity {
     public void setRole(String role) {
         this.role = role;
     }
+
+    @Column(name = "is_blocked", nullable = false)
+    private Boolean isBlocked = false;
+
+    public Boolean isBlocked() {
+        return isBlocked;
+    }
+
+    public void setBlocked(Boolean blocked) {
+        isBlocked = blocked;
+    }
 }

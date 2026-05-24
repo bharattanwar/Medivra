@@ -10,6 +10,10 @@ import ManageAvailability from './pages/ManageAvailability';
 import DoctorAppointments from './pages/DoctorAppointments';
 import PaymentHistory from './pages/PaymentHistory';
 import ConsultationRoom from './pages/ConsultationRoom';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminUsers from './pages/AdminUsers';
+import AdminDoctors from './pages/AdminDoctors';
+import AdminAppointments from './pages/AdminAppointments';
 
 import { WebSocketProvider } from './context/WebSocketContext';
 
@@ -30,6 +34,12 @@ function App() {
             <Route path="/doctor/availability" element={<ManageAvailability />} />
             <Route path="/doctor/appointments" element={<DoctorAppointments />} />
             <Route path="/consultation/:appointmentId" element={<ConsultationRoom />} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/doctors" element={<AdminDoctors />} />
+            <Route path="/admin/appointments" element={<AdminAppointments />} />
           </Routes>
         </Layout>
       </Router>

@@ -21,6 +21,7 @@ public interface DoctorRepository extends JpaRepository<Doctor, UUID> {
     List<Doctor> findBySpecializationContainingIgnoreCase(String specialization);
 
     @Query("SELECT d FROM Doctor d JOIN d.user u WHERE " +
+           "d.isApproved = true AND " +
            "(LOWER(d.specialization) LIKE LOWER(CONCAT('%', COALESCE(:specialization, ''), '%'))) " +
            "AND (LOWER(d.city) LIKE LOWER(CONCAT('%', COALESCE(:city, ''), '%'))) " +
            "AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', COALESCE(:name, ''), '%')))")

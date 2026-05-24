@@ -70,6 +70,7 @@ public class DoctorService {
         // Set defaults for new fields
         doctor.setRating(0.0);
         doctor.setAvailable(true);
+        doctor.setApproved(false);
 
         doctorRepository.save(doctor);
 
@@ -86,6 +87,7 @@ public class DoctorService {
 
     public List<DoctorDTO> getAllDoctors() {
         return doctorRepository.findAll().stream()
+                .filter(d -> Boolean.TRUE.equals(d.isApproved()))
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }

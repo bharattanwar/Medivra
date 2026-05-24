@@ -1,0 +1,3 @@
+ALTER TABLE doctors ADD COLUMN is_approved BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN is_blocked BOOLEAN DEFAULT FALSE;
+UPDATE doctors SET is_approved = TRUE;
