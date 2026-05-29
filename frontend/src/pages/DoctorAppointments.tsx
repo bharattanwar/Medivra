@@ -33,7 +33,7 @@ const DoctorAppointments: React.FC = () => {
       if (!doctorUserId) return;
 
       // Fetch appointments by doctor's user ID directly
-      const response = await api.get(`/appointments/doctor/userId/${doctorUserId}`);
+      const response = await api.get(`/appointments/doctor/userId/${doctorUserId}`); 
       setAppointments(response.data);
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -100,8 +100,9 @@ const DoctorAppointments: React.FC = () => {
                       <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
                         ⏰ {apt.timeSlot}
                       </span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${apt.status === 'CONFIRMED' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-yellow-50 text-yellow-600 border-yellow-100'
-                        }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                        apt.status === 'CONFIRMED' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-yellow-50 text-yellow-600 border-yellow-100'
+                      }`}>
                         {apt.status}
                       </span>
                     </div>
@@ -111,13 +112,13 @@ const DoctorAppointments: React.FC = () => {
                 <div className="flex flex-col lg:flex-nowrap items-center gap-3 w-full lg:w-auto">
                   {apt.status === 'CONFIRMED' && (
                     <>
-                      <button
+                      <button 
                         onClick={() => handleStartConsultation(apt)}
                         className="min-w-[210px] h-9 bg-green-600 hover:bg-green-700 text-white px-6 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center"
                       >
                         💬 Start Consultation
                       </button>
-                      <button
+                      <button 
                         onClick={() => navigate(`/consultation/${apt.id}`)}
                         className="min-w-[210px] h-9 bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center"
                       >
@@ -125,13 +126,13 @@ const DoctorAppointments: React.FC = () => {
                       </button>
                     </>
                   )}
-                  <button
+                  <button 
                     onClick={() => setSelectedAppointment(apt)}
                     className="min-w-[210px] h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center"
                   >
                     Upload Prescription
                   </button>
-                  <button
+                  <button 
                     className="min-w-[140px] h-9 bg-white border border-gray-200 text-gray-700 px-6 rounded-xl font-semibold hover:bg-gray-50 transition-all flex items-center justify-center"
                   >
                     Cancel
@@ -159,7 +160,7 @@ const DoctorAppointments: React.FC = () => {
         )}
 
         {activeChat && (
-          <ChatWindow
+          <ChatWindow 
             conversationId={activeChat.conversationId}
             otherPartyName={activeChat.patientName}
             otherPartyId={activeChat.patientId}
