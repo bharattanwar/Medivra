@@ -15,5 +15,9 @@
 			<groupId>com.app</groupId>
 			<artifactId>common-module</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>user-module</artifactId>
+		</dependency>
 	</dependencies>
 </project>

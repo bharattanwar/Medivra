@@ -1,13 +1,24 @@
 package com.app.pharmacy.entity;
 
 import com.app.common.entity.BaseEntity;
+import com.app.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.util.UUID;
 
 @Entity
 @Table(name = "pharmacies")
 public class Pharmacy extends BaseEntity {
+
+    @Column(nullable = false, name = "user_id", unique = true)
+    private UUID userId;
+
+    @OneToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "id", insertable = false, updatable = false)
+    private User user;
 
     @Column(nullable = false)
     private String name;
@@ -73,5 +84,21 @@ public class Pharmacy extends BaseEntity {
 
     public void setActive(Boolean active) {
         isActive = active;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
     }
 }

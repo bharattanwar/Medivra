@@ -92,7 +92,7 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
                 className="hidden"
                 id="file-upload"
               />
-              <label 
+              <label
                 htmlFor="file-upload"
                 className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group"
               >
