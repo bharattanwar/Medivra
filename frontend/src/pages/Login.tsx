@@ -27,6 +27,8 @@ const Login = () => {
         navigate('/admin/dashboard');
       } else if (role === 'DOCTOR') {
         navigate('/dashboard');
+      } else if (role === 'PHARMACY') {
+        navigate('/pharmacy/dashboard');
       } else {
         navigate('/patient/dashboard');
       }
@@ -50,6 +52,10 @@ const Login = () => {
           Don&apos;t have an account?{' '}
           <Link to="/signup" className="font-semibold text-blue-600 hover:text-blue-700">
             Sign up
+          </Link>
+          <span className="mx-2 text-slate-300">·</span>
+          <Link to="/pharmacy/register" className="font-semibold text-indigo-600 hover:text-indigo-700">
+            Register Pharmacy
           </Link>
         </>
       }

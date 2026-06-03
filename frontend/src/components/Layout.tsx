@@ -10,6 +10,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   const isDoctor = role === 'DOCTOR';
+  const isPharmacy = role === 'PHARMACY';
+  const isPatient = role === 'PATIENT';
 
   const { toasts, removeToast } = useWebSocket();
 
@@ -32,6 +34,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       ? '/admin/dashboard'
       : isDoctor
       ? '/dashboard'
+      : isPharmacy
+      ? '/pharmacy/dashboard'
       : '/patient/dashboard'
     : '/login';
 
@@ -67,6 +71,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         Appointments/Payments
                       </Link>
                     </>
+                  ) : isPharmacy ? (
+                    <>
+                      <Link to="/pharmacy/dashboard" className={navLinkClass('/pharmacy/dashboard')}>
+                        Inventory
+                      </Link>
+                    </>
                   ) : isDoctor ? (
                     <>
                       <Link to="/dashboard" className={navLinkClass('/dashboard')}>
@@ -79,10 +89,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         Schedule
                       </Link>
                     </>
-                  ) : (
+                  ) : isPatient ? (
                     <>
                       <Link to="/patient/dashboard" className={navLinkClass('/patient/dashboard')}>
                         Find Doctors
+                      </Link>
+                      <Link to="/patient/pharmacy" className={navLinkClass('/patient/pharmacy')}>
+                        Pharmacy
                       </Link>
                       <Link to="/patient/appointments" className={navLinkClass('/patient/appointments')}>
                         Appointments
@@ -91,7 +104,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         Payments
                       </Link>
                     </>
-                  )}
+                  ) : null}
                   
                   {/* Real-time Notification Bell Center */}
                   <div className="ml-2 mr-1">

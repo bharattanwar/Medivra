@@ -14,6 +14,9 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminUsers from './pages/AdminUsers';
 import AdminDoctors from './pages/AdminDoctors';
 import AdminAppointments from './pages/AdminAppointments';
+import PharmacyRegistration from './pages/PharmacyRegistration';
+import PharmacyDashboard from './pages/PharmacyDashboard';
+import PharmacyFinder from './pages/PharmacyFinder';
 
 import { WebSocketProvider } from './context/WebSocketContext';
 
@@ -40,6 +43,11 @@ function App() {
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/doctors" element={<AdminDoctors />} />
             <Route path="/admin/appointments" element={<AdminAppointments />} />
+
+            {/* Pharmacy Routes */}
+            <Route path="/pharmacy/register" element={<PharmacyRegistration />} />
+            <Route path="/pharmacy/dashboard" element={<PharmacyDashboard />} />
+            <Route path="/patient/pharmacy" element={<PharmacyFinder />} />
           </Routes>
         </Layout>
       </Router>
