@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, Plus, Trash2, Edit3, Check, X, Search,
-  Building2, MapPin, Phone, RefreshCw, AlertCircle, Loader2
+  Building2, MapPin, Phone, RefreshCw, AlertCircle, Loader2,
+  FileText, Download, CheckSquare
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -9,7 +10,6 @@ interface InventoryItem {
   id: string;
   medicineId: string;
   medicineName: string;
-  manufacturer: string;
   strength: string;
   quantity: number;
   price: number;
@@ -24,7 +24,6 @@ interface PharmacyProfile {
 
 interface AddForm {
   medicineName: string;
-  manufacturer: string;
   strength: string;
   quantity: string;
   price: string;
@@ -44,21 +43,26 @@ const PharmacyDashboard: React.FC = () => {
   // Add medicine form
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState<AddForm>({
-    medicineName: '', manufacturer: '', strength: '', quantity: '', price: ''
+    medicineName: '', strength: '', quantity: '', price: ''
   });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
 
   // Medicine autocomplete
   const [medicineQuery, setMedicineQuery] = useState('');
-  const [medicineSuggestions, setMedicineSuggestions] = useState<{ id: string; name: string; manufacturer: string; strength: string }[]>([]);
+  const [medicineSuggestions, setMedicineSuggestions] = useState<{ id: string; name: string; strength: string }[]>([]);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [selectedMedicineId, setSelectedMedicineId] = useState<string | null>(null);
 
-  // Inline edit
+  // Single Inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ quantity: '', price: '' });
   const [editLoading, setEditLoading] = useState(false);
+
+  // Bulk Edit Mode
+  const [bulkEditMode, setBulkEditMode] = useState(false);
+  const [bulkForm, setBulkForm] = useState<Record<string, { quantity: string; price: string }>>({});
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Delete
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -66,11 +70,35 @@ const PharmacyDashboard: React.FC = () => {
   // Search
   const [searchTerm, setSearchTerm] = useState('');
 
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await api.get('/pharmacies/profile');
+      // If endpoint doesn't exist, we fallback
+      if (res.data.success) {
+        setProfile(res.data.data);
+      }
+    } catch {
+      // Fallback details
+      setProfile({
+        name: 'Apollo Pharmacy',
+        address: '12 MG Road, Bengaluru, Karnataka 560001',
+        phoneNumber: '+91 98765 43210',
+        active: true
+      });
+    }
+  }, []);
+
   const fetchInventory = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get('/pharmacies/inventory');
-      if (res.data.success) setInventory(res.data.data);
+      if (res.data.success) {
+        const mapped = res.data.data.map((item: any) => ({
+          ...item,
+          id: item.inventoryId
+        }));
+        setInventory(mapped);
+      }
     } catch {
       setError('Failed to load inventory.');
     } finally {
@@ -79,8 +107,9 @@ const PharmacyDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    fetchProfile();
     fetchInventory();
-  }, [fetchInventory]);
+  }, [fetchProfile, fetchInventory]);
 
   // Medicine search debounce
   useEffect(() => {
@@ -114,12 +143,11 @@ const PharmacyDashboard: React.FC = () => {
       await api.post('/pharmacies/inventory', {
         medicineId: selectedMedicineId || undefined,
         medicineName: selectedMedicineId ? undefined : addForm.medicineName,
-        manufacturer: addForm.manufacturer || undefined,
         strength: addForm.strength || undefined,
         quantity: parseInt(addForm.quantity),
         price: parseFloat(addForm.price),
       });
-      setAddForm({ medicineName: '', manufacturer: '', strength: '', quantity: '', price: '' });
+      setAddForm({ medicineName: '', strength: '', quantity: '', price: '' });
       setMedicineQuery('');
       setSelectedMedicineId(null);
       setMedicineSuggestions([]);
@@ -156,6 +184,53 @@ const PharmacyDashboard: React.FC = () => {
     }
   };
 
+  // Toggle Bulk Edit Mode
+  const toggleBulkEdit = () => {
+    if (bulkEditMode) {
+      setBulkEditMode(false);
+    } else {
+      const initialForm: Record<string, { quantity: string; price: string }> = {};
+      inventory.forEach(item => {
+        initialForm[item.id] = { quantity: item.quantity.toString(), price: item.price.toString() };
+      });
+      setBulkForm(initialForm);
+      setBulkEditMode(true);
+    }
+  };
+
+  // Handle input change in bulk form
+  const handleBulkChange = (itemId: string, field: 'quantity' | 'price', value: string) => {
+    setBulkForm(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        [field]: value
+      }
+    }));
+  };
+
+  // Submit bulk update
+  const handleBulkSave = async () => {
+    try {
+      setBulkLoading(true);
+      const requests = Object.entries(bulkForm).map(([itemId, val]) => ({
+        inventoryId: itemId,
+        quantity: parseInt(val.quantity) || 0,
+        price: parseFloat(val.price) || 0
+      }));
+
+      const res = await api.post('/pharmacies/inventory/bulk', requests);
+      if (res.data.success) {
+        setBulkEditMode(false);
+        await fetchInventory();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Bulk update failed.');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const handleDelete = async (itemId: string) => {
     try {
       setDeletingId(itemId);
@@ -168,9 +243,86 @@ const PharmacyDashboard: React.FC = () => {
     }
   };
 
+  // Export to CSV
+  const handleExportCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Medicine Name,Strength,Quantity,Price per Unit (INR),Total Valuation (INR)\n";
+    
+    inventory.forEach(item => {
+      const valuation = item.quantity * item.price;
+      csvContent += `"${item.medicineName}","${item.strength || '—'}",${item.quantity},${item.price},${valuation}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${profile?.name?.replace(/\s+/g, '_')}_inventory.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export to PDF / Print Report
+  const handlePrintPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const html = `
+      <html>
+        <head>
+          <title>Medivra Inventory - ${profile?.name || 'Pharmacy'}</title>
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #1e293b; }
+            h1 { margin-bottom: 5px; color: #312e81; font-size: 26px; }
+            p { margin-top: 0; color: #64748b; font-size: 13px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 25px; }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 12px 10px; text-align: left; font-size: 13px; }
+            th { background-color: #f1f5f9; color: #475569; font-weight: bold; }
+            .text-right { text-align: right; }
+            .total { margin-top: 35px; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; border-top: 2px solid #e2e8f0; padding-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <h1>${profile?.name || 'Pharmacy Inventory Report'}</h1>
+          <p>Location: ${profile?.address || 'N/A'} | Contact: ${profile?.phoneNumber || 'N/A'}</p>
+          <p>Report Date: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Medicine</th>
+                <th>Strength</th>
+                <th class="text-right">Quantity (units)</th>
+                <th class="text-right">Price per Unit</th>
+                <th class="text-right">Valuation</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inventory.map(item => `
+                <tr>
+                  <td><strong>${item.medicineName}</strong></td>
+                  <td>${item.strength || '—'}</td>
+                  <td class="text-right">${item.quantity}</td>
+                  <td class="text-right">₹${Number(item.price).toFixed(2)}</td>
+                  <td class="text-right">₹${(item.quantity * item.price).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="total">Grand Valuation: ₹${totalValue.toFixed(2)}</div>
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const filteredInventory = inventory.filter(item =>
-    item.medicineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.manufacturer || '').toLowerCase().includes(searchTerm.toLowerCase())
+    item.medicineName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalValue = inventory.reduce((sum, item) => sum + item.quantity * item.price, 0);
@@ -226,29 +378,61 @@ const PharmacyDashboard: React.FC = () => {
         )}
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search medicines…"
+              placeholder="Search medicines by name…"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
-          <div className="flex gap-2">
+          
+          <div className="flex flex-wrap gap-2">
+            {/* Export Buttons */}
+            <button
+              onClick={handleExportCSV}
+              disabled={inventory.length === 0}
+              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Download className="h-4 w-4 text-emerald-600" /> Excel/CSV
+            </button>
+            <button
+              onClick={handlePrintPDF}
+              disabled={inventory.length === 0}
+              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <FileText className="h-4 w-4 text-indigo-600" /> Print PDF
+            </button>
+            
+            <div className="h-8 w-[1px] bg-slate-200 hidden sm:block self-center mx-1" />
+
+            <button
+              onClick={toggleBulkEdit}
+              disabled={inventory.length === 0}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                bulkEditMode
+                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
+              }`}
+            >
+              <CheckSquare className="h-4 w-4 text-amber-600" /> {bulkEditMode ? 'Cancel Bulk' : 'Bulk Edit'}
+            </button>
+
             <button
               onClick={fetchInventory}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-indigo-600 transition-colors cursor-pointer"
               title="Refresh"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
+            
             <button
               id="add-medicine-btn"
               onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-md shadow-indigo-100"
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md shadow-indigo-100 cursor-pointer"
             >
               <Plus className="h-4 w-4" /> Add Medicine
             </button>
@@ -306,7 +490,6 @@ const PharmacyDashboard: React.FC = () => {
                           setAddForm(prev => ({
                             ...prev,
                             medicineName: m.name,
-                            manufacturer: m.manufacturer || '',
                             strength: m.strength || '',
                           }));
                           setMedicineSuggestions([]);
@@ -314,24 +497,14 @@ const PharmacyDashboard: React.FC = () => {
                         className="w-full text-left px-4 py-3 hover:bg-indigo-50 border-b border-slate-100 last:border-b-0 transition-colors"
                       >
                         <p className="text-sm font-semibold text-slate-800">{m.name}</p>
-                        <p className="text-xs text-slate-400">{m.manufacturer} {m.strength && `· ${m.strength}`}</p>
+                        <p className="text-xs text-slate-400">{m.strength && `Strength: ${m.strength}`}</p>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Manufacturer</label>
-                  <input
-                    type="text"
-                    value={addForm.manufacturer}
-                    onChange={e => setAddForm(prev => ({ ...prev, manufacturer: e.target.value }))}
-                    placeholder="e.g. Sun Pharma"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Strength / Dosage</label>
                   <input
@@ -377,14 +550,14 @@ const PharmacyDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { setShowAdd(false); setAddError(''); }}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addLoading || !medicineQuery}
-                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60"
+                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   {addLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Adding…</> : <><Check className="h-4 w-4" /> Add to Inventory</>}
                 </button>
@@ -402,6 +575,23 @@ const PharmacyDashboard: React.FC = () => {
                 {filteredInventory.length}
               </span>
             </h2>
+            {bulkEditMode && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkSave}
+                  disabled={bulkLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save All Changes
+                </button>
+                <button
+                  onClick={() => setBulkEditMode(false)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
 
           {loading ? (
@@ -416,7 +606,7 @@ const PharmacyDashboard: React.FC = () => {
               <p className="text-slate-400 text-sm mb-6">Add your first inventory item to get started.</p>
               <button
                 onClick={() => setShowAdd(true)}
-                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
               >
                 <Plus className="h-4 w-4" /> Add Medicine
               </button>
@@ -439,7 +629,6 @@ const PharmacyDashboard: React.FC = () => {
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-slate-900 text-sm">{item.medicineName}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{item.manufacturer || '—'}</p>
                       </td>
                       <td className="px-4 py-4">
                         <span className="text-sm text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
@@ -447,7 +636,15 @@ const PharmacyDashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        {editingId === item.id ? (
+                        {bulkEditMode ? (
+                          <input
+                            type="number"
+                            value={bulkForm[item.id]?.quantity || ''}
+                            onChange={e => handleBulkChange(item.id, 'quantity', e.target.value)}
+                            className="w-20 text-right px-2 py-1 rounded-lg border border-indigo-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            min={0}
+                          />
+                        ) : editingId === item.id ? (
                           <input
                             type="number"
                             value={editForm.quantity}
@@ -465,7 +662,16 @@ const PharmacyDashboard: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right">
-                        {editingId === item.id ? (
+                        {bulkEditMode ? (
+                          <input
+                            type="number"
+                            value={bulkForm[item.id]?.price || ''}
+                            onChange={e => handleBulkChange(item.id, 'price', e.target.value)}
+                            className="w-24 text-right px-2 py-1 rounded-lg border border-indigo-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            min={0}
+                            step={0.01}
+                          />
+                        ) : editingId === item.id ? (
                           <input
                             type="number"
                             value={editForm.price}
@@ -480,24 +686,30 @@ const PharmacyDashboard: React.FC = () => {
                       </td>
                       <td className="px-4 py-4 text-right">
                         <span className="text-sm font-semibold text-indigo-700">
-                          ₹{(item.quantity * item.price).toFixed(2)}
+                          {bulkEditMode ? (
+                            `₹${((parseInt(bulkForm[item.id]?.quantity) || 0) * (parseFloat(bulkForm[item.id]?.price) || 0)).toFixed(2)}`
+                          ) : (
+                            `₹${(item.quantity * item.price).toFixed(2)}`
+                          )}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {editingId === item.id ? (
+                          {bulkEditMode ? (
+                            <span className="text-xs text-slate-400 font-semibold italic">Bulk Editing</span>
+                          ) : editingId === item.id ? (
                             <>
                               <button
                                 onClick={() => handleEditSave(item.id)}
                                 disabled={editLoading}
-                                className="p-2 rounded-lg bg-green-100 text-green-600 hover:bg-green-200 transition-colors disabled:opacity-60"
+                                className="p-2 rounded-lg bg-green-100 text-green-600 hover:bg-green-200 transition-colors disabled:opacity-60 cursor-pointer"
                                 title="Save"
                               >
                                 {editLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                               </button>
                               <button
                                 onClick={() => setEditingId(null)}
-                                className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
                                 title="Cancel"
                               >
                                 <X className="h-4 w-4" />
@@ -507,7 +719,7 @@ const PharmacyDashboard: React.FC = () => {
                             <>
                               <button
                                 onClick={() => handleEdit(item)}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100"
+                                className="p-2 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                                 title="Edit"
                               >
                                 <Edit3 className="h-4 w-4" />
@@ -517,7 +729,7 @@ const PharmacyDashboard: React.FC = () => {
                                   if (confirm(`Remove "${item.medicineName}" from inventory?`)) handleDelete(item.id);
                                 }}
                                 disabled={deletingId === item.id}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-60"
+                                className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-60 cursor-pointer"
                                 title="Delete"
                               >
                                 {deletingId === item.id

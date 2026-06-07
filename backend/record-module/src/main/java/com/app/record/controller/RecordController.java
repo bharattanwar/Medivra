@@ -36,6 +36,11 @@ public class RecordController {
         return ResponseEntity.ok(recordService.uploadPrescription(appointmentId, doctorId, patientId, notes, file));
     }
 
+    @PostMapping("/digital")
+    public ResponseEntity<MedicalRecord> createDigital(@RequestBody com.app.record.dto.DigitalPrescriptionRequest request) {
+        return ResponseEntity.ok(recordService.createDigitalPrescription(request));
+    }
+
     @GetMapping("/patient/{id}")
     public ResponseEntity<List<MedicalRecord>> getPatientRecords(@PathVariable UUID id) {
         return ResponseEntity.ok(recordService.getRecordsByPatient(id));

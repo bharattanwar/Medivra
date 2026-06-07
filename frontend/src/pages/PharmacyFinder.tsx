@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, Phone, Package, Pill, Loader2, AlertCircle, Search,
-  Navigation, Plus, Minus, Trash2, CheckCircle2, ShoppingCart,
-  ChevronRight, Star, X, Sparkles
+  Navigation, Plus, Minus, CheckCircle2, ShoppingCart,
+  X, Sparkles
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -82,6 +82,7 @@ const PharmacyFinder: React.FC = () => {
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchError, setMatchError] = useState('');
   const [matchLocation, setMatchLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [activeMapPharmacyId, setActiveMapPharmacyId] = useState<string | null>(null);
   const [matchGeoLoading, setMatchGeoLoading] = useState(false);
 
   // ── Geolocation helpers ───────────────────────────────────────────────────
@@ -371,14 +372,34 @@ const PharmacyFinder: React.FC = () => {
                           </div>
                         </div>
 
-                        <a
-                          href={`https://maps.google.com/?q=${pharm.latitude},${pharm.longitude}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-4 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 py-2 rounded-xl transition-colors border border-indigo-100"
-                        >
-                          <MapPin className="h-3.5 w-3.5" /> View on Maps <ChevronRight className="h-3.5 w-3.5" />
-                        </a>
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === pharm.id ? null : pharm.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 py-2 rounded-xl transition-colors border border-indigo-100 cursor-pointer"
+                          >
+                            <MapPin className="h-3.5 w-3.5" /> {activeMapPharmacyId === pharm.id ? 'Hide Map' : 'View Map'}
+                          </button>
+                          <a
+                            href={`https://maps.google.com/?q=${pharm.latitude},${pharm.longitude}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 py-2 rounded-xl transition-colors border border-slate-200"
+                          >
+                            Google Maps
+                          </a>
+                        </div>
+                        {activeMapPharmacyId === pharm.id && (
+                          <div className="mt-3 w-full h-48 rounded-xl overflow-hidden border border-slate-200">
+                            <iframe
+                              title={`Map for ${pharm.name}`}
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0 }}
+                              src={`https://maps.google.com/maps?q=${pharm.latitude},${pharm.longitude}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -592,11 +613,31 @@ const PharmacyFinder: React.FC = () => {
                               </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-xs text-slate-400">Distance</p>
-                            <p className="font-bold text-indigo-600">{alloc.distanceKm} km</p>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === alloc.pharmacyId ? null : alloc.pharmacyId)}
+                              className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white px-2.5 py-1.5 rounded-lg border border-indigo-100 cursor-pointer animate-fade-in"
+                            >
+                              <MapPin className="h-3.5 w-3.5" /> {activeMapPharmacyId === alloc.pharmacyId ? 'Hide Map' : 'Map'}
+                            </button>
+                            <div className="text-right">
+                              <p className="text-xs text-slate-400">Distance</p>
+                              <p className="font-bold text-indigo-600">{alloc.distanceKm} km</p>
+                            </div>
                           </div>
                         </div>
+                        {activeMapPharmacyId === alloc.pharmacyId && (
+                          <div className="mt-3 w-full h-48 rounded-xl overflow-hidden border border-slate-200 bg-white">
+                            <iframe
+                              title={`Map for ${alloc.pharmacyName}`}
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0 }}
+                              src={`https://maps.google.com/maps?q=${encodeURIComponent(alloc.pharmacyAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Items */}

@@ -36,7 +36,6 @@ const ConsultationRoom: React.FC = () => {
   // State
   const [appointment, setAppointment] = useState<AppointmentDetails | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -180,7 +179,6 @@ const ConsultationRoom: React.FC = () => {
       peerConnectionRef.current = null;
     }
     setLocalStream(null);
-    setRemoteStream(null);
   };
 
   // Helper: Create RTCPeerConnection
@@ -223,7 +221,6 @@ const ConsultationRoom: React.FC = () => {
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = event.streams[0];
       }
-      setRemoteStream(event.streams[0]);
       setConnectionStatus('connected');
     };
 
@@ -309,7 +306,6 @@ const ConsultationRoom: React.FC = () => {
 
   const handlePeerLeave = () => {
     console.log('Peer left consultation.');
-    setRemoteStream(null);
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
     }

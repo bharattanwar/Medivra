@@ -174,19 +174,32 @@ const PharmacyRegistration: React.FC = () => {
 
   // Shared "location confirmed" badge
   const LocationBadge = () => (
-    <div className="flex items-center gap-2 mt-3 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-2.5 rounded-xl">
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-      <span>
-        {coordSource === 'gps' ? 'GPS location captured' : 'Address geocoded successfully'}
-        {' '}<span className="text-green-500 text-xs">— coordinates stored securely</span>
-      </span>
-      <button
-        type="button"
-        onClick={() => { setCoords(null); setCoordSource(null); }}
-        className="ml-auto text-xs text-green-600 hover:text-green-800 underline"
-      >
-        Change
-      </button>
+    <div className="flex flex-col gap-3 mt-3">
+      <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-2.5 rounded-xl">
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+        <span>
+          {coordSource === 'gps' ? 'GPS location captured' : 'Address geocoded successfully'}
+          {' '}<span className="text-green-500 text-xs">— coordinates stored securely</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => { setCoords(null); setCoordSource(null); }}
+          className="ml-auto text-xs text-green-600 hover:text-green-800 underline"
+        >
+          Change
+        </button>
+      </div>
+      {coords && (
+        <div className="w-full h-48 rounded-xl overflow-hidden border border-slate-200 shadow-sm mt-1">
+          <iframe
+            title="Pharmacy Location Map"
+            width="100%"
+            height="100%"
+            style={{ border: 0 }}
+            src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+          />
+        </div>
+      )}
     </div>
   );
 

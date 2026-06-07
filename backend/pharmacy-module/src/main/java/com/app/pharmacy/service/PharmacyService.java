@@ -191,6 +191,38 @@ public class PharmacyService {
         pharmacyInventoryRepository.delete(inventory);
     }
 
+    @Transactional
+    public List<InventoryResponse> bulkUpdateInventory(String email, List<com.app.pharmacy.dto.BulkInventoryUpdateRequest> requests) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Pharmacy pharmacy = pharmacyRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new RuntimeException("Pharmacy profile not found for user: " + email));
+
+        java.util.ArrayList<InventoryResponse> responses = new java.util.ArrayList<>();
+        for (com.app.pharmacy.dto.BulkInventoryUpdateRequest req : requests) {
+            PharmacyInventory inventory = pharmacyInventoryRepository.findById(req.getInventoryId())
+                    .orElseThrow(() -> new RuntimeException("Inventory item not found: " + req.getInventoryId()));
+
+            if (!inventory.getPharmacy().getId().equals(pharmacy.getId())) {
+                throw new RuntimeException("Unauthorized action for inventory: " + req.getInventoryId());
+            }
+
+            inventory.setQuantity(req.getQuantity());
+            inventory.setPrice(req.getPrice());
+            PharmacyInventory saved = pharmacyInventoryRepository.save(inventory);
+            responses.add(convertToResponse(saved));
+        }
+        return responses;
+    }
+
+    @Transactional(readOnly = true)
+    public Pharmacy getPharmacyProfile(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return pharmacyRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new RuntimeException("Pharmacy profile not found for user: " + email));
+    }
+
     private InventoryResponse convertToResponse(PharmacyInventory inventory) {
         return new InventoryResponse(
                 inventory.getId(),

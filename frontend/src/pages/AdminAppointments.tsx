@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Search, DollarSign, Activity, FileText, ArrowLeft, ArrowUpRight } from 'lucide-react';
+import { Calendar, Search, ArrowLeft } from 'lucide-react';
 import api from '../services/api';
 
 interface Appointment {

@@ -72,4 +72,27 @@ public class PharmacyController {
         pharmacyService.deleteInventoryItem(userDetails.getUsername(), inventoryId);
         return ResponseEntity.ok(ApiResponse.success(null, "Inventory item deleted successfully"));
     }
+
+    @PostMapping("/inventory/bulk")
+    public ResponseEntity<ApiResponse<List<InventoryResponse>>> bulkUpdateInventory(
+            @RequestBody List<com.app.pharmacy.dto.BulkInventoryUpdateRequest> requests,
+            Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        List<InventoryResponse> response = pharmacyService.bulkUpdateInventory(userDetails.getUsername(), requests);
+        return ResponseEntity.ok(ApiResponse.success(response, "Bulk inventory items updated successfully"));
+    }
+
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getPharmacyProfile(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        com.app.pharmacy.entity.Pharmacy pharmacy = pharmacyService.getPharmacyProfile(userDetails.getUsername());
+        
+        java.util.Map<String, Object> profile = new java.util.HashMap<>();
+        profile.put("name", pharmacy.getName());
+        profile.put("address", pharmacy.getAddress());
+        profile.put("phoneNumber", pharmacy.getPhoneNumber());
+        profile.put("active", pharmacy.getActive());
+        
+        return ResponseEntity.ok(ApiResponse.success(profile, "Pharmacy profile retrieved successfully"));
+    }
 }
