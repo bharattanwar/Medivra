@@ -2,6 +2,8 @@ package com.app.appointment.controller;
 
 import com.app.appointment.dto.AppointmentRequest;
 import com.app.appointment.dto.AppointmentResponse;
+import com.app.appointment.dto.CancelAppointmentRequest;
+import com.app.appointment.dto.RescheduleAppointmentRequest;
 import com.app.appointment.service.AppointmentService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -42,5 +44,26 @@ public class AppointmentController {
     @GetMapping("/{id}")
     public ResponseEntity<AppointmentResponse> getAppointmentById(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getAppointmentById(id));
+    }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<AppointmentResponse> cancelAppointment(
+            @PathVariable UUID id,
+            @RequestBody CancelAppointmentRequest request) {
+        return ResponseEntity.ok(appointmentService.cancelAppointment(id, request));
+    }
+
+    @PutMapping("/{id}/reject")
+    public ResponseEntity<AppointmentResponse> rejectAppointment(
+            @PathVariable UUID id,
+            @RequestBody CancelAppointmentRequest request) {
+        return ResponseEntity.ok(appointmentService.rejectAppointment(id, request));
+    }
+
+    @PutMapping("/{id}/reschedule")
+    public ResponseEntity<AppointmentResponse> rescheduleAppointment(
+            @PathVariable UUID id,
+            @RequestBody RescheduleAppointmentRequest request) {
+        return ResponseEntity.ok(appointmentService.rescheduleAppointment(id, request));
     }
 }

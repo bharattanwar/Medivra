@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Briefcase, CreditCard, Award, FileText, Image, MapPin, Landmark } from 'lucide-react';
 import api from '../services/api';
+import AuthShell from '../components/AuthShell';
 
 const DoctorRegistration = () => {
   const navigate = useNavigate();
@@ -79,106 +81,177 @@ const DoctorRegistration = () => {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
-      <div className="glass-panel animate-fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '500px' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Doctor Profile</h2>
-        <p style={{ textAlign: 'center', marginBottom: '2rem', color: 'var(--text-muted)' }}>
-          Complete your medical profile to start consulting.
-        </p>
-        {error && <div style={{ color: '#ff6b6b', marginBottom: '1rem', textAlign: 'center', fontSize: '0.875rem' }}>{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label className="input-label">Specialization</label>
+    <AuthShell
+      title="Doctor Profile"
+      subtitle="Complete your medical profile to start consulting"
+      footer={
+        <Link to="/signup" className="font-semibold text-blue-600 hover:text-blue-700">
+          ← Back to Signup
+        </Link>
+      }
+    >
+      {error && (
+        <div className="mb-6 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 text-center">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Specialization */}
+        <div>
+          <label htmlFor="specialization" className="block text-sm font-semibold text-slate-700 mb-1.5">
+            Specialization
+          </label>
+          <div className="relative">
+            <Award className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
+              id="specialization"
               type="text"
-              className="input-field"
+              required
               placeholder="e.g. Cardiologist"
               value={formData.specialization}
               onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-              required
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
             />
           </div>
-          <div className="input-group">
-            <label className="input-label">Medical License Number</label>
+        </div>
+
+        {/* License Number */}
+        <div>
+          <label htmlFor="licenseNumber" className="block text-sm font-semibold text-slate-700 mb-1.5">
+            Medical License Number
+          </label>
+          <div className="relative">
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
+              id="licenseNumber"
               type="text"
-              className="input-field"
+              required
+              placeholder="e.g. LIC-12345678"
               value={formData.licenseNumber}
               onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
-              required
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
             />
           </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <div className="input-group" style={{ flex: 1 }}>
-              <label className="input-label">Years of Experience</label>
+        </div>
+
+        {/* Experience & Fee */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="experienceYears" className="block text-sm font-semibold text-slate-700 mb-1.5">
+              Experience (Years)
+            </label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <input
+                id="experienceYears"
                 type="number"
-                className="input-field"
+                required
+                min="0"
+                placeholder="5"
                 value={formData.experienceYears}
                 onChange={(e) => setFormData({ ...formData, experienceYears: e.target.value })}
-                required
-              />
-            </div>
-            <div className="input-group" style={{ flex: 1 }}>
-              <label className="input-label">Consultation Fee ($)</label>
-              <input
-                type="number"
-                className="input-field"
-                value={formData.consultationFee}
-                onChange={(e) => setFormData({ ...formData, consultationFee: e.target.value })}
-                required
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
               />
             </div>
           </div>
-          <div className="input-group">
-            <label className="input-label">Hospital Name</label>
+          <div>
+            <label htmlFor="consultationFee" className="block text-sm font-semibold text-slate-700 mb-1.5">
+              Consultation Fee (₹)
+            </label>
+            <div className="relative">
+              <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <input
+                id="consultationFee"
+                type="number"
+                required
+                min="0"
+                placeholder="500"
+                value={formData.consultationFee}
+                onChange={(e) => setFormData({ ...formData, consultationFee: e.target.value })}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Hospital Name */}
+        <div>
+          <label htmlFor="hospitalName" className="block text-sm font-semibold text-slate-700 mb-1.5">
+            Hospital Name
+          </label>
+          <div className="relative">
+            <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
+              id="hospitalName"
               type="text"
-              className="input-field"
               placeholder="e.g. Medivra Central"
               value={formData.hospitalName}
               onChange={(e) => setFormData({ ...formData, hospitalName: e.target.value })}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
             />
           </div>
-          <div className="input-group">
-            <label className="input-label">City</label>
+        </div>
+
+        {/* City */}
+        <div>
+          <label htmlFor="city" className="block text-sm font-semibold text-slate-700 mb-1.5">
+            City
+          </label>
+          <div className="relative">
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
+              id="city"
               type="text"
-              className="input-field"
               placeholder="e.g. Bangalore"
               value={formData.city}
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
             />
           </div>
-          <div className="input-group">
-            <label className="input-label">Profile Image URL</label>
+        </div>
+
+        {/* Profile Image URL */}
+        <div>
+          <label htmlFor="profileImageUrl" className="block text-sm font-semibold text-slate-700 mb-1.5">
+            Profile Image URL
+          </label>
+          <div className="relative">
+            <Image className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
+              id="profileImageUrl"
               type="text"
-              className="input-field"
               placeholder="https://example.com/photo.jpg"
               value={formData.profileImageUrl}
               onChange={handleImageUrlChange}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-sm"
             />
-            {formData.profileImageUrl && (
-              <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Preview:</p>
-                <img 
-                  src={formData.profileImageUrl} 
-                  alt="Preview" 
-                  style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #3b82f6' }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
           </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
-            {loading ? 'Registering...' : 'Complete Registration'}
-          </button>
-        </form>
-      </div>
-    </div>
+          {formData.profileImageUrl && (
+            <div className="mt-3 flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-xs text-slate-500 font-medium">Preview:</span>
+              <img 
+                src={formData.profileImageUrl} 
+                alt="Preview" 
+                className="w-12 h-12 rounded-full object-cover border-2 border-green-500 shadow-sm"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full flex items-center justify-center bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white py-3 rounded-xl font-semibold transition-all shadow-md active:scale-95 text-sm mt-6"
+        >
+          {loading ? 'Completing Registration...' : 'Complete Registration'}
+        </button>
+      </form>
+    </AuthShell>
   );
 };
 

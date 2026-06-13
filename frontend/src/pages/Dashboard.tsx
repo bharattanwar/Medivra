@@ -7,6 +7,7 @@ import {
   FileText,
   ChevronRight,
   Stethoscope,
+  XCircle,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -54,6 +55,7 @@ const Dashboard = () => {
 
   const confirmed = appointments.filter((a) => a.status === 'CONFIRMED');
   const pending = appointments.filter((a) => a.status === 'PENDING');
+  const cancelled = appointments.filter((a) => a.status === 'CANCELLED' || a.status === 'REJECTED');
   const upcoming = confirmed
     .filter((a) => new Date(a.appointmentDate) >= new Date(new Date().toDateString()))
     .slice(0, 5);
@@ -80,6 +82,13 @@ const Dashboard = () => {
       color: 'bg-amber-500',
       light: 'bg-amber-50 text-amber-700',
     },
+    {
+      label: 'Cancelled / Rejected',
+      value: cancelled.length,
+      icon: XCircle,
+      color: 'bg-red-600',
+      light: 'bg-red-50 text-red-700',
+    },
   ];
 
   return (
@@ -100,7 +109,7 @@ const Dashboard = () => {
       </section>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 pb-12">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {statCards.map(({ label, value, icon: Icon, color, light }) => (
             <div
               key={label}

@@ -3,16 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import UploadPrescriptionModal from '../components/UploadPrescriptionModal';
 import ChatWindow from '../components/chat/ChatWindow';
+import CancelReasonModal from '../components/CancelReasonModal';
+import RescheduleModal from '../components/RescheduleModal';
 
 interface Appointment {
   id: string;
   patientName: string;
   patientId: string;
   doctorId: string;
+  doctorName: string;
   appointmentDate: string;
   timeSlot: string;
   status: string;
   hasPrescription?: boolean;
+  cancellationReason?: string;
+  cancelledBy?: string;
+  rescheduledFromId?: string;
 }
 
 const DoctorAppointments: React.FC = () => {
@@ -22,6 +28,10 @@ const DoctorAppointments: React.FC = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [activeChat, setActiveChat] = useState<{ conversationId: string, patientName: string, patientId: string } | null>(null);
+
+  // Modal states
+  const [cancelModalApt, setCancelModalApt] = useState<{ id: string; mode: 'cancel' | 'reject' } | null>(null);
+  const [rescheduleModalApt, setRescheduleModalApt] = useState<{ id: string; doctorId: string; doctorName: string } | null>(null);
 
   useEffect(() => {
     fetchAppointments();
@@ -65,16 +75,62 @@ const DoctorAppointments: React.FC = () => {
     }
   };
 
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'CONFIRMED':
+        return 'bg-green-50 text-green-600 border-green-100';
+      case 'PENDING':
+        return 'bg-yellow-50 text-yellow-600 border-yellow-100';
+      case 'CANCELLED':
+        return 'bg-red-50 text-red-600 border-red-100';
+      case 'REJECTED':
+        return 'bg-orange-50 text-orange-600 border-orange-100';
+      case 'RESCHEDULED':
+        return 'bg-purple-50 text-purple-600 border-purple-100';
+      case 'COMPLETED':
+        return 'bg-blue-50 text-blue-600 border-blue-100';
+      case 'IN_PROGRESS':
+        return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+      default:
+        return 'bg-gray-50 text-gray-600 border-gray-100';
+    }
+  };
+
+  const doctorUserId = localStorage.getItem('userId');
+
+  const getLocalTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isCancelable = (dateStr: string) => {
+    return dateStr > getLocalTodayString();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-10">
-          <h1 className="text-3xl font-extrabold text-gray-900">Patient Consultations</h1>
-          <p className="text-gray-500 mt-1">Manage your appointments and provide prescriptions.</p>
+        <div className="mb-10 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-extrabold text-gray-900">Patient Consultations</h1>
+            <p className="text-gray-500 mt-1">Manage your appointments and provide prescriptions.</p>
+          </div>
+          <button 
+            onClick={fetchAppointments}
+            className="p-2.5 bg-white rounded-full border border-gray-200 hover:bg-gray-50 shadow-sm transition-all"
+            title="Refresh"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
 
         {successMessage && (
-          <div className="mb-6 bg-green-100 text-green-700 p-4 rounded-2xl font-bold animate-fade-in text-center">
+          <div className="mb-6 bg-green-100 text-green-700 p-4 rounded-2xl font-bold animate-fade-in text-center shadow-sm">
             {successMessage}
           </div>
         )}
@@ -86,58 +142,105 @@ const DoctorAppointments: React.FC = () => {
         ) : appointments.length > 0 ? (
           <div className="grid gap-6">
             {appointments.map((apt) => (
-              <div key={apt.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-5">
-                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-3xl">
-                    👤
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{apt.patientName}</h3>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mt-1">
-                      <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
-                        📅 {new Date(apt.appointmentDate).toLocaleDateString()}
-                      </span>
-                      <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
-                        ⏰ {apt.timeSlot}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                        apt.status === 'CONFIRMED' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-yellow-50 text-yellow-600 border-yellow-100'
-                      }`}>
-                        {apt.status}
-                      </span>
+              <div key={apt.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4 hover:shadow-md transition-shadow">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                  <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-3xl shrink-0">
+                      👤
                     </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">{apt.patientName}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-600">
+                          📅 {new Date(apt.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-600">
+                          ⏰ {apt.timeSlot}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadgeClass(apt.status)}`}>
+                          {apt.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                    {apt.status === 'CONFIRMED' && (
+                      <>
+                        <button 
+                          onClick={() => handleStartConsultation(apt)}
+                          className="flex-1 lg:flex-initial h-9 bg-green-600 hover:bg-green-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                        >
+                          💬 Start Consultation
+                        </button>
+                        <button 
+                          onClick={() => navigate(`/consultation/${apt.id}`)}
+                          className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                        >
+                          📹 Join Video Call
+                        </button>
+                        <button 
+                          onClick={() => setSelectedAppointment(apt)}
+                          className="flex-1 lg:flex-initial h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                        >
+                          📤 Upload Prescription
+                        </button>
+                        {isCancelable(apt.appointmentDate) && (
+                          <>
+                            <button 
+                              onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
+                              className="flex-1 lg:flex-initial h-9 bg-white border border-blue-200 text-blue-600 px-4 rounded-xl font-semibold hover:bg-blue-50 transition-all flex items-center justify-center text-xs gap-1"
+                            >
+                              📅 Reschedule
+                            </button>
+                            <button 
+                              onClick={() => setCancelModalApt({ id: apt.id, mode: 'cancel' })}
+                              className="flex-1 lg:flex-initial h-9 bg-white border border-red-200 text-red-600 px-4 rounded-xl font-semibold hover:bg-red-50 transition-all flex items-center justify-center text-xs gap-1"
+                            >
+                              🚫 Cancel
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {apt.status === 'PENDING' && (
+                      <>
+                        {isCancelable(apt.appointmentDate) && (
+                          <button 
+                            onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
+                            className="flex-1 lg:flex-initial h-9 bg-white border border-blue-200 text-blue-600 px-4 rounded-xl font-semibold hover:bg-blue-50 transition-all flex items-center justify-center text-xs gap-1"
+                          >
+                            📅 Reschedule
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setCancelModalApt({ id: apt.id, mode: 'reject' })}
+                          className="flex-1 lg:flex-initial h-9 bg-white border border-orange-200 text-orange-600 px-4 rounded-xl font-semibold hover:bg-orange-50 transition-all flex items-center justify-center text-xs gap-1"
+                        >
+                          ❌ Reject Request
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex flex-col lg:flex-nowrap items-center gap-3 w-full lg:w-auto">
-                  {apt.status === 'CONFIRMED' && (
-                    <>
-                      <button 
-                        onClick={() => handleStartConsultation(apt)}
-                        className="min-w-[210px] h-9 bg-green-600 hover:bg-green-700 text-white px-6 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center"
-                      >
-                        💬 Start Consultation
-                      </button>
-                      <button 
-                        onClick={() => navigate(`/consultation/${apt.id}`)}
-                        className="min-w-[210px] h-9 bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center"
-                      >
-                        📹 Join Video Call
-                      </button>
-                    </>
-                  )}
-                  <button 
-                    onClick={() => setSelectedAppointment(apt)}
-                    className="min-w-[210px] h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center"
-                  >
-                    Upload Prescription
-                  </button>
-                  <button 
-                    className="min-w-[140px] h-9 bg-white border border-gray-200 text-gray-700 px-6 rounded-xl font-semibold hover:bg-gray-50 transition-all flex items-center justify-center"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                {/* Cancellation / Rejection / Rescheduled reason details */}
+                {(apt.status === 'CANCELLED' || apt.status === 'REJECTED' || apt.status === 'RESCHEDULED') && apt.cancellationReason && (
+                  <div className="border-t pt-3 mt-1 border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                    <div className="text-sm">
+                      <span className="font-bold text-gray-700">
+                        {apt.status === 'RESCHEDULED' ? 'Rescheduled Reason: ' : 'Reason: '}
+                      </span>
+                      <span className="text-gray-600 italic">"{apt.cancellationReason}"</span>
+                    </div>
+                    {apt.cancelledBy && (
+                      <span className="text-xs text-gray-400 font-medium bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100 self-start sm:self-auto shrink-0">
+                        Action by: {apt.cancelledBy === doctorUserId ? 'You' : 'Patient'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -165,6 +268,35 @@ const DoctorAppointments: React.FC = () => {
             otherPartyName={activeChat.patientName}
             otherPartyId={activeChat.patientId}
             onClose={() => setActiveChat(null)}
+          />
+        )}
+
+        {cancelModalApt && (
+          <CancelReasonModal
+            appointmentId={cancelModalApt.id}
+            mode={cancelModalApt.mode}
+            onClose={() => setCancelModalApt(null)}
+            onSuccess={() => {
+              setCancelModalApt(null);
+              setSuccessMessage(`Appointment successfully ${cancelModalApt.mode}ed!`);
+              fetchAppointments();
+              setTimeout(() => setSuccessMessage(''), 3000);
+            }}
+          />
+        )}
+
+        {rescheduleModalApt && (
+          <RescheduleModal
+            appointmentId={rescheduleModalApt.id}
+            doctorId={rescheduleModalApt.doctorId}
+            doctorName={rescheduleModalApt.doctorName}
+            onClose={() => setRescheduleModalApt(null)}
+            onSuccess={() => {
+              setRescheduleModalApt(null);
+              setSuccessMessage('Appointment successfully rescheduled!');
+              fetchAppointments();
+              setTimeout(() => setSuccessMessage(''), 3000);
+            }}
           />
         )}
       </div>

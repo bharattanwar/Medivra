@@ -14,6 +14,9 @@ public class AppointmentResponse {
     private String timeSlot;
     private String status;
     private LocalDateTime createdAt;
+    private String cancellationReason;
+    private UUID cancelledBy;
+    private UUID rescheduledFromId;
 
     public UUID getId() {
         return id;
@@ -85,5 +88,29 @@ public class AppointmentResponse {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public void setCancellationReason(String cancellationReason) {
+        this.cancellationReason = cancellationReason;
+    }
+
+    public UUID getCancelledBy() {
+        return cancelledBy;
+    }
+
+    public void setCancelledBy(UUID cancelledBy) {
+        this.cancelledBy = cancelledBy;
+    }
+
+    public UUID getRescheduledFromId() {
+        return rescheduledFromId;
+    }
+
+    public void setRescheduledFromId(UUID rescheduledFromId) {
+        this.rescheduledFromId = rescheduledFromId;
     }
 }

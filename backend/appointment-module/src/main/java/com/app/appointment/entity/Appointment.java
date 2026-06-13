@@ -5,6 +5,7 @@ import com.app.doctor.entity.Doctor;
 import com.app.user.entity.User;
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "appointments")
@@ -27,6 +28,16 @@ public class Appointment extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AppointmentStatus status = AppointmentStatus.PENDING;
+
+    @Column(name = "cancellation_reason")
+    private String cancellationReason;
+
+    @Column(name = "cancelled_by")
+    private UUID cancelledBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rescheduled_from_id")
+    private Appointment rescheduledFrom;
 
     public Doctor getDoctor() {
         return doctor;
@@ -66,5 +77,29 @@ public class Appointment extends BaseEntity {
 
     public void setStatus(AppointmentStatus status) {
         this.status = status;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public void setCancellationReason(String cancellationReason) {
+        this.cancellationReason = cancellationReason;
+    }
+
+    public UUID getCancelledBy() {
+        return cancelledBy;
+    }
+
+    public void setCancelledBy(UUID cancelledBy) {
+        this.cancelledBy = cancelledBy;
+    }
+
+    public Appointment getRescheduledFrom() {
+        return rescheduledFrom;
+    }
+
+    public void setRescheduledFrom(Appointment rescheduledFrom) {
+        this.rescheduledFrom = rescheduledFrom;
     }
 }

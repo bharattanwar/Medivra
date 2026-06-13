@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { processConsultationPayment } from '../components/PaymentCheckout';
 import ChatWindow from '../components/chat/ChatWindow';
+import CancelReasonModal from '../components/CancelReasonModal';
+import RescheduleModal from '../components/RescheduleModal';
 
 interface Appointment {
   id: string;
@@ -12,6 +14,9 @@ interface Appointment {
   timeSlot: string;
   status: string;
   createdAt: string;
+  cancellationReason?: string;
+  cancelledBy?: string;
+  rescheduledFromId?: string;
 }
 
 const MyAppointments: React.FC = () => {
@@ -20,6 +25,11 @@ const MyAppointments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<{ conversationId: string, doctorName: string, doctorId: string } | null>(null);
+
+  // Modal states
+  const [cancelModalApt, setCancelModalApt] = useState<{ id: string } | null>(null);
+  const [rescheduleModalApt, setRescheduleModalApt] = useState<{ id: string; doctorId: string; doctorName: string } | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     fetchAppointments();
@@ -44,14 +54,14 @@ const MyAppointments: React.FC = () => {
       const response = await api.get(`/records/appointment/${appointmentId}`);
       if (response.data) {
         const { filePath } = response.data;
-        
+
         const fileResponse = await api.get(`/records/view/${filePath}`, {
           responseType: 'blob'
         });
-        
+
         const fileURL = URL.createObjectURL(fileResponse.data);
         window.open(fileURL, '_blank');
-        
+
         setTimeout(() => URL.revokeObjectURL(fileURL), 1000 * 60);
       } else {
         alert('No prescription found for this appointment.');
@@ -77,9 +87,15 @@ const MyAppointments: React.FC = () => {
         patientId,
         doctorName: apt.doctorName,
         amount: fee,
-        onSuccess: () => fetchAppointments(),
+        onSuccess: () => {
+          setSuccessMessage('Payment successful! Your appointment is confirmed.');
+          fetchAppointments();
+          setTimeout(() => setSuccessMessage(''), 3000);
+        },
         onError: (msg) => alert(msg),
       });
+    } catch (err) {
+      console.error('Error initiating payment:', err);
     } finally {
       setPayingId(null);
     }
@@ -101,13 +117,39 @@ const MyAppointments: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'CONFIRMED': return 'bg-green-100 text-green-700 border-green-200';
-      case 'PENDING': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'CANCELLED': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'CONFIRMED':
+        return 'bg-green-50 text-green-700 border-green-200';
+      case 'PENDING':
+        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      case 'CANCELLED':
+        return 'bg-red-50 text-red-700 border-red-200';
+      case 'REJECTED':
+        return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'RESCHEDULED':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'COMPLETED':
+        return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'IN_PROGRESS':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-200';
     }
+  };
+
+  const patientUserId = localStorage.getItem('userId');
+
+  const getLocalTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isCancelable = (dateStr: string) => {
+    return dateStr > getLocalTodayString();
   };
 
   return (
@@ -118,16 +160,22 @@ const MyAppointments: React.FC = () => {
             <h1 className="text-3xl font-extrabold text-gray-900">My Appointments</h1>
             <p className="text-gray-500 mt-1">Manage your upcoming and past medical consultations.</p>
           </div>
-          <button 
+          <button
             onClick={fetchAppointments}
-            className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+            className="p-2.5 bg-white rounded-full border border-gray-200 hover:bg-gray-50 shadow-sm transition-all"
             title="Refresh"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
         </div>
+
+        {successMessage && (
+          <div className="mb-6 bg-green-100 text-green-700 p-4 rounded-2xl font-bold animate-fade-in text-center shadow-sm">
+            {successMessage}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-20">
@@ -136,60 +184,121 @@ const MyAppointments: React.FC = () => {
         ) : appointments.length > 0 ? (
           <div className="grid gap-6">
             {appointments.map((apt) => (
-              <div key={apt.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl">
-                    🩺
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Dr. {apt.doctorName}</h3>
-                    <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                      <span className="flex items-center gap-1">
-                        📅 {new Date(apt.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        ⏰ {apt.timeSlot}
-                      </span>
+              <div key={apt.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4 hover:shadow-md transition-shadow">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  <div className="flex items-center gap-5">
+                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl shrink-0">
+                      🩺
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Dr. {apt.doctorName}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-600">
+                          📅 {new Date(apt.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <span className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-600">
+                          ⏰ {apt.timeSlot}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadgeClass(apt.status)}`}>
+                          {apt.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                    {apt.status === 'PENDING' && (
+                      <>
+                        <button
+                          onClick={() => handlePayNow(apt)}
+                          disabled={payingId === apt.id}
+                          className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                        >
+                          {payingId === apt.id ? 'Processing...' : '💳 Pay Now'}
+                        </button>
+                        {isCancelable(apt.appointmentDate) && (
+                          <>
+                            <button
+                              onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
+                              className="flex-1 md:flex-initial bg-white border border-blue-200 text-blue-600 px-4 py-2 rounded-xl font-semibold hover:bg-blue-50 transition-all text-xs"
+                            >
+                              📅 Reschedule
+                            </button>
+                            <button
+                              onClick={() => setCancelModalApt({ id: apt.id })}
+                              className="flex-1 md:flex-initial bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl font-semibold hover:bg-red-50 transition-all text-xs"
+                            >
+                              🚫 Cancel Request
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+                    {apt.status === 'CONFIRMED' && (
+                      <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                        <button
+                          onClick={() => handleViewPrescription(apt.id)}
+                          className="flex-1 md:flex-initial bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl font-semibold hover:bg-indigo-50 transition-all text-xs"
+                        >
+                          📄 View Prescription
+                        </button>
+                        <button
+                          onClick={() => handleStartConsultation(apt)}
+                          className="flex-1 md:flex-initial bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-green-700 transition-all shadow-md active:scale-95"
+                        >
+                          💬 Chat
+                        </button>
+                        <button
+                          onClick={() => navigate(`/consultation/${apt.id}`)}
+                          className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1"
+                        >
+                          📹 Join Call
+                        </button>
+                        {isCancelable(apt.appointmentDate) && (
+                          <>
+                            <button
+                              onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
+                              className="flex-1 md:flex-initial bg-white border border-blue-200 text-blue-600 px-4 py-2 rounded-xl font-semibold hover:bg-blue-50 transition-all text-xs"
+                            >
+                              📅 Reschedule
+                            </button>
+                            <button
+                              onClick={() => setCancelModalApt({ id: apt.id })}
+                              className="flex-1 md:flex-initial bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl font-semibold hover:bg-red-50 transition-all text-xs"
+                            >
+                              🚫 Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {(apt.status === 'CANCELLED' || apt.status === 'REJECTED') && (
+                      <button
+                        onClick={() => navigate('/patient/dashboard')}
+                        className="flex-1 md:flex-initial bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 px-4 py-2 rounded-xl font-bold text-xs transition-all"
+                      >
+                        🔄 Rebook Consultation
+                      </button>
+                    )}
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                  <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(apt.status)}`}>
-                    {apt.status}
-                  </span>
-                  {apt.status === 'PENDING' && (
-                    <button
-                      onClick={() => handlePayNow(apt)}
-                      disabled={payingId === apt.id}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {payingId === apt.id ? 'Processing...' : 'Pay Now'}
-                    </button>
-                  )}
-                  {apt.status === 'CONFIRMED' && (
-                    <div className="flex flex-col items-end gap-2">
-                      <button
-                        onClick={() => handleViewPrescription(apt.id)}
-                        className="text-blue-600 font-bold text-sm hover:underline"
-                      >
-                        View Prescription
-                      </button>
-                      <button
-                        onClick={() => handleStartConsultation(apt)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700 w-full"
-                      >
-                        💬 Start Consultation
-                      </button>
-                      <button
-                        onClick={() => navigate(`/consultation/${apt.id}`)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-1.5"
-                      >
-                        📹 Join Video Call
-                      </button>
+
+                {/* Cancellation / Rejection / Rescheduled reason details */}
+                {(apt.status === 'CANCELLED' || apt.status === 'REJECTED' || apt.status === 'RESCHEDULED') && apt.cancellationReason && (
+                  <div className="border-t pt-3 mt-1 border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                    <div className="text-sm">
+                      <span className="font-bold text-gray-700">
+                        {apt.status === 'RESCHEDULED' ? 'Rescheduled Reason: ' : 'Reason: '}
+                      </span>
+                      <span className="text-gray-600 italic">"{apt.cancellationReason}"</span>
                     </div>
-                  )}
-                </div>
+                    {apt.cancelledBy && (
+                      <span className="text-xs text-gray-400 font-medium bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100 self-start sm:self-auto shrink-0">
+                        Action by: {apt.cancelledBy === patientUserId ? 'You' : 'Doctor'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -198,9 +307,9 @@ const MyAppointments: React.FC = () => {
             <div className="text-6xl mb-4">🗓️</div>
             <h3 className="text-xl font-bold text-gray-900">No appointments yet</h3>
             <p className="text-gray-500 mt-2">You haven't booked any medical consultations yet.</p>
-            <button 
-              onClick={() => window.history.back()}
-              className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all"
+            <button
+              onClick={() => navigate('/patient/dashboard')}
+              className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md"
             >
               Book Now
             </button>
@@ -209,11 +318,40 @@ const MyAppointments: React.FC = () => {
       </div>
 
       {activeChat && (
-        <ChatWindow 
+        <ChatWindow
           conversationId={activeChat.conversationId}
           otherPartyName={`Dr. ${activeChat.doctorName}`}
           otherPartyId={activeChat.doctorId}
           onClose={() => setActiveChat(null)}
+        />
+      )}
+
+      {cancelModalApt && (
+        <CancelReasonModal
+          appointmentId={cancelModalApt.id}
+          mode="cancel"
+          onClose={() => setCancelModalApt(null)}
+          onSuccess={() => {
+            setCancelModalApt(null);
+            setSuccessMessage('Appointment request cancelled successfully.');
+            fetchAppointments();
+            setTimeout(() => setSuccessMessage(''), 3000);
+          }}
+        />
+      )}
+
+      {rescheduleModalApt && (
+        <RescheduleModal
+          appointmentId={rescheduleModalApt.id}
+          doctorId={rescheduleModalApt.doctorId}
+          doctorName={rescheduleModalApt.doctorName}
+          onClose={() => setRescheduleModalApt(null)}
+          onSuccess={() => {
+            setRescheduleModalApt(null);
+            setSuccessMessage('Appointment rescheduled successfully.');
+            fetchAppointments();
+            setTimeout(() => setSuccessMessage(''), 3000);
+          }}
         />
       )}
     </div>
