@@ -75,6 +75,31 @@ const DoctorAppointments: React.FC = () => {
     }
   };
 
+  const handleAcceptReschedule = async (appointmentId: string) => {
+    try {
+      await api.put(`/appointments/${appointmentId}/reschedule/accept`);
+      setSuccessMessage('Reschedule request accepted successfully.');
+      fetchAppointments();
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error: any) {
+      console.error('Error accepting reschedule:', error);
+      alert(error.response?.data?.message || 'Failed to accept reschedule.');
+    }
+  };
+
+  const handleRejectReschedule = async (appointmentId: string) => {
+    try {
+      await api.put(`/appointments/${appointmentId}/reschedule/reject`);
+      setSuccessMessage('Reschedule request rejected. Refund initiated if applicable.');
+      fetchAppointments();
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error: any) {
+      console.error('Error rejecting reschedule:', error);
+      alert(error.response?.data?.message || 'Failed to reject reschedule.');
+    }
+  };
+
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'CONFIRMED':
@@ -87,6 +112,8 @@ const DoctorAppointments: React.FC = () => {
         return 'bg-orange-50 text-orange-600 border-orange-100';
       case 'RESCHEDULED':
         return 'bg-purple-50 text-purple-600 border-purple-100';
+      case 'PENDING_RESCHEDULE':
+        return 'bg-amber-50 text-amber-600 border-amber-100';
       case 'COMPLETED':
         return 'bg-blue-50 text-blue-600 border-blue-100';
       case 'IN_PROGRESS':
@@ -222,15 +249,39 @@ const DoctorAppointments: React.FC = () => {
                         </button>
                       </>
                     )}
+                     {apt.status === 'PENDING_RESCHEDULE' && (
+                      <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                        {apt.cancelledBy !== doctorUserId ? (
+                          <>
+                            <button
+                              onClick={() => handleAcceptReschedule(apt.id)}
+                              className="flex-1 lg:flex-initial h-9 bg-green-600 hover:bg-green-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                            >
+                              ✅ Accept Reschedule
+                            </button>
+                            <button
+                              onClick={() => handleRejectReschedule(apt.id)}
+                              className="flex-1 lg:flex-initial h-9 bg-red-600 hover:bg-red-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                            >
+                              ❌ Reject Reschedule
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                            ⏳ Waiting for Patient's Approval
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Cancellation / Rejection / Rescheduled reason details */}
-                {(apt.status === 'CANCELLED' || apt.status === 'REJECTED' || apt.status === 'RESCHEDULED') && apt.cancellationReason && (
+                {(apt.status === 'CANCELLED' || apt.status === 'REJECTED' || apt.status === 'RESCHEDULED' || apt.status === 'PENDING_RESCHEDULE') && apt.cancellationReason && (
                   <div className="border-t pt-3 mt-1 border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <div className="text-sm">
                       <span className="font-bold text-gray-700">
-                        {apt.status === 'RESCHEDULED' ? 'Rescheduled Reason: ' : 'Reason: '}
+                        {(apt.status === 'RESCHEDULED' || apt.status === 'PENDING_RESCHEDULE') ? 'Rescheduled Reason: ' : 'Reason: '}
                       </span>
                       <span className="text-gray-600 italic">"{apt.cancellationReason}"</span>
                     </div>

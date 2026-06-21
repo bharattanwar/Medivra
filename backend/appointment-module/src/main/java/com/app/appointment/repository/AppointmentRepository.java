@@ -26,5 +26,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
            "JOIN FETCH d.user " +
            "WHERE a.id = :id")
     Optional<Appointment> findByIdWithParties(@Param("id") UUID id);
+
+    @Query("SELECT COUNT(a) FROM Appointment a WHERE a.patient.id = :patientId AND a.createdAt >= :startOfDay AND a.createdAt <= :endOfDay")
+    long countAppointmentsForPatientToday(
+            @Param("patientId") UUID patientId,
+            @Param("startOfDay") java.time.LocalDateTime startOfDay,
+            @Param("endOfDay") java.time.LocalDateTime endOfDay);
 }
 

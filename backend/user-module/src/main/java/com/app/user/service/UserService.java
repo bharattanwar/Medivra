@@ -9,6 +9,8 @@ import com.app.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
+
 
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -32,14 +34,14 @@ public class UserService implements UserDetailsService {
         this.jwtUtil = jwtUtil;
     }
 
+    @Transactional
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
 
-        if (Boolean.TRUE.equals(user.isBlocked())) {
-            throw new RuntimeException("Your account has been blocked by the admin.");
-        }
+        checkAndUnblockUser(user);
+
 
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
@@ -73,14 +75,13 @@ public class UserService implements UserDetailsService {
         );
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Invalid email or password"));
 
-        if (Boolean.TRUE.equals(user.isBlocked())) {
-            throw new RuntimeException("Your account has been blocked by the admin.");
-        }
+        checkAndUnblockUser(user);
+
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid email or password");
@@ -96,4 +97,17 @@ public class UserService implements UserDetailsService {
                 user.getId()
         );
     }
+
+    private void checkAndUnblockUser(User user) {
+        if (Boolean.TRUE.equals(user.isBlocked())) {
+            if (user.getBlockedUntil() != null && LocalDateTime.now().isAfter(user.getBlockedUntil())) {
+                user.setBlocked(false);
+                user.setBlockedUntil(null);
+                userRepository.save(user);
+            } else {
+                throw new RuntimeException("Your account has been blocked by the admin.");
+            }
+        }
+    }
 }
+

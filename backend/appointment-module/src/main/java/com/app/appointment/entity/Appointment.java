@@ -95,11 +95,23 @@ public class Appointment extends BaseEntity {
         this.cancelledBy = cancelledBy;
     }
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status")
+    private AppointmentStatus previousStatus;
+
     public Appointment getRescheduledFrom() {
         return rescheduledFrom;
     }
 
     public void setRescheduledFrom(Appointment rescheduledFrom) {
         this.rescheduledFrom = rescheduledFrom;
+    }
+
+    public AppointmentStatus getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public void setPreviousStatus(AppointmentStatus previousStatus) {
+        this.previousStatus = previousStatus;
     }
 }

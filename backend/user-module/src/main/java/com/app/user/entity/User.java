@@ -5,6 +5,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "users")
 public class User extends BaseEntity {
@@ -56,11 +58,22 @@ public class User extends BaseEntity {
     @Column(name = "is_blocked", nullable = false)
     private Boolean isBlocked = false;
 
+    @Column(name = "blocked_until")
+    private LocalDateTime blockedUntil;
+
     public Boolean isBlocked() {
         return isBlocked;
     }
 
     public void setBlocked(Boolean blocked) {
         isBlocked = blocked;
+    }
+
+    public LocalDateTime getBlockedUntil() {
+        return blockedUntil;
+    }
+
+    public void setBlockedUntil(LocalDateTime blockedUntil) {
+        this.blockedUntil = blockedUntil;
     }
 }

@@ -272,13 +272,13 @@ const PharmacyDashboard: React.FC = () => {
           <title>Medivra Inventory - ${profile?.name || 'Pharmacy'}</title>
           <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #1e293b; }
-            h1 { margin-bottom: 5px; color: #312e81; font-size: 26px; }
+            h1 { margin-bottom: 5px; color: #ea580c; font-size: 26px; }
             p { margin-top: 0; color: #64748b; font-size: 13px; }
             table { width: 100%; border-collapse: collapse; margin-top: 25px; }
             th, td { border-bottom: 1px solid #e2e8f0; padding: 12px 10px; text-align: left; font-size: 13px; }
             th { background-color: #f1f5f9; color: #475569; font-weight: bold; }
             .text-right { text-align: right; }
-            .total { margin-top: 35px; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; border-top: 2px solid #e2e8f0; padding-top: 15px; }
+            .total { margin-top: 35px; text-align: right; font-size: 16px; font-weight: bold; color: #ea580c; border-top: 2px solid #e2e8f0; padding-top: 15px; }
           </style>
         </head>
         <body>
@@ -330,7 +330,7 @@ const PharmacyDashboard: React.FC = () => {
   return (
     <div className="min-h-full bg-slate-50">
       {/* Hero Header */}
-      <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white">
+      <div className="bg-gradient-to-r from-orange-500 via-orange-600 to-amber-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -346,7 +346,7 @@ const PharmacyDashboard: React.FC = () => {
                 {profile?.name || 'My Pharmacy'}
               </h1>
               {profile && (
-                <div className="flex flex-wrap gap-4 mt-2 text-indigo-200 text-sm">
+                <div className="flex flex-wrap gap-4 mt-2 text-orange-200 text-sm">
                   <span className="flex items-center gap-1.5">
                     <MapPin className="h-4 w-4" /> {profile.address}
                   </span>
@@ -359,11 +359,11 @@ const PharmacyDashboard: React.FC = () => {
             <div className="flex gap-3">
               <div className="bg-white/15 backdrop-blur rounded-2xl px-5 py-4 text-center min-w-[110px]">
                 <p className="text-2xl font-bold">{inventory.length}</p>
-                <p className="text-indigo-200 text-xs mt-0.5">Medicines</p>
+                <p className="text-orange-200 text-xs mt-0.5">Medicines</p>
               </div>
               <div className="bg-white/15 backdrop-blur rounded-2xl px-5 py-4 text-center min-w-[110px]">
                 <p className="text-2xl font-bold">₹{totalValue.toFixed(0)}</p>
-                <p className="text-indigo-200 text-xs mt-0.5">Stock Value</p>
+                <p className="text-orange-200 text-xs mt-0.5">Stock Value</p>
               </div>
             </div>
           </div>
@@ -386,7 +386,7 @@ const PharmacyDashboard: React.FC = () => {
               placeholder="Search medicines by name…"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
             />
           </div>
           
@@ -404,7 +404,7 @@ const PharmacyDashboard: React.FC = () => {
               disabled={inventory.length === 0}
               className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
             >
-              <FileText className="h-4 w-4 text-indigo-600" /> Print PDF
+              <FileText className="h-4 w-4 text-orange-600" /> Print PDF
             </button>
             
             <div className="h-8 w-[1px] bg-slate-200 hidden sm:block self-center mx-1" />
@@ -423,7 +423,7 @@ const PharmacyDashboard: React.FC = () => {
 
             <button
               onClick={fetchInventory}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-indigo-600 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-orange-600 transition-colors cursor-pointer"
               title="Refresh"
             >
               <RefreshCw className="h-4 w-4" />
@@ -432,7 +432,7 @@ const PharmacyDashboard: React.FC = () => {
             <button
               id="add-medicine-btn"
               onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md shadow-indigo-100 cursor-pointer"
+              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md shadow-orange-100 cursor-pointer"
             >
               <Plus className="h-4 w-4" /> Add Medicine
             </button>
@@ -441,10 +441,10 @@ const PharmacyDashboard: React.FC = () => {
 
         {/* Add Medicine Panel */}
         {showAdd && (
-          <div className="bg-white rounded-2xl border border-indigo-100 shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-indigo-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl border border-orange-100 shadow-lg overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-4 border-b border-orange-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <Plus className="h-4 w-4 text-indigo-600" /> Add Inventory Item
+                <Plus className="h-4 w-4 text-orange-600" /> Add Inventory Item
               </h3>
               <button onClick={() => { setShowAdd(false); setAddError(''); }} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg">
                 <X className="h-4 w-4" />
@@ -464,7 +464,7 @@ const PharmacyDashboard: React.FC = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   {suggestionLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-400 animate-spin" />
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-400 animate-spin" />
                   )}
                   <input
                     type="text"
@@ -475,7 +475,7 @@ const PharmacyDashboard: React.FC = () => {
                       setSelectedMedicineId(null);
                     }}
                     placeholder="Search existing medicines or type a new name…"
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
                   />
                 </div>
                 {medicineSuggestions.length > 0 && (
@@ -494,7 +494,7 @@ const PharmacyDashboard: React.FC = () => {
                           }));
                           setMedicineSuggestions([]);
                         }}
-                        className="w-full text-left px-4 py-3 hover:bg-indigo-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                        className="w-full text-left px-4 py-3 hover:bg-orange-50 border-b border-slate-100 last:border-b-0 transition-colors"
                       >
                         <p className="text-sm font-semibold text-slate-800">{m.name}</p>
                         <p className="text-xs text-slate-400">{m.strength && `Strength: ${m.strength}`}</p>
@@ -512,7 +512,7 @@ const PharmacyDashboard: React.FC = () => {
                     value={addForm.strength}
                     onChange={e => setAddForm(prev => ({ ...prev, strength: e.target.value }))}
                     placeholder="e.g. 500mg"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
                   />
                 </div>
                 <div className="space-y-1">
@@ -526,7 +526,7 @@ const PharmacyDashboard: React.FC = () => {
                     onChange={e => setAddForm(prev => ({ ...prev, quantity: e.target.value }))}
                     placeholder="100"
                     required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
                   />
                 </div>
                 <div className="space-y-1">
@@ -541,7 +541,7 @@ const PharmacyDashboard: React.FC = () => {
                     onChange={e => setAddForm(prev => ({ ...prev, price: e.target.value }))}
                     placeholder="25.00"
                     required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
                   />
                 </div>
               </div>
@@ -557,7 +557,7 @@ const PharmacyDashboard: React.FC = () => {
                 <button
                   type="submit"
                   disabled={addLoading || !medicineQuery}
-                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60 cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   {addLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Adding…</> : <><Check className="h-4 w-4" /> Add to Inventory</>}
                 </button>
@@ -570,8 +570,8 @@ const PharmacyDashboard: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="font-bold text-slate-800 flex items-center gap-2">
-              <Package className="h-5 w-5 text-indigo-500" /> Inventory
-              <span className="text-xs font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full ml-1">
+              <Package className="h-5 w-5 text-orange-500" /> Inventory
+              <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full ml-1">
                 {filteredInventory.length}
               </span>
             </h2>
@@ -596,7 +596,7 @@ const PharmacyDashboard: React.FC = () => {
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+              <Loader2 className="h-8 w-8 text-orange-500 animate-spin" />
               <p className="text-slate-400 text-sm">Loading inventory…</p>
             </div>
           ) : filteredInventory.length === 0 ? (
@@ -606,7 +606,7 @@ const PharmacyDashboard: React.FC = () => {
               <p className="text-slate-400 text-sm mb-6">Add your first inventory item to get started.</p>
               <button
                 onClick={() => setShowAdd(true)}
-                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
               >
                 <Plus className="h-4 w-4" /> Add Medicine
               </button>
@@ -641,7 +641,7 @@ const PharmacyDashboard: React.FC = () => {
                             type="number"
                             value={bulkForm[item.id]?.quantity || ''}
                             onChange={e => handleBulkChange(item.id, 'quantity', e.target.value)}
-                            className="w-20 text-right px-2 py-1 rounded-lg border border-indigo-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="w-20 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
                             min={0}
                           />
                         ) : editingId === item.id ? (
@@ -649,7 +649,7 @@ const PharmacyDashboard: React.FC = () => {
                             type="number"
                             value={editForm.quantity}
                             onChange={e => setEditForm(prev => ({ ...prev, quantity: e.target.value }))}
-                            className="w-20 text-right px-2 py-1 rounded-lg border border-indigo-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="w-20 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
                             min={0}
                           />
                         ) : (
@@ -667,7 +667,7 @@ const PharmacyDashboard: React.FC = () => {
                             type="number"
                             value={bulkForm[item.id]?.price || ''}
                             onChange={e => handleBulkChange(item.id, 'price', e.target.value)}
-                            className="w-24 text-right px-2 py-1 rounded-lg border border-indigo-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="w-24 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
                             min={0}
                             step={0.01}
                           />
@@ -676,7 +676,7 @@ const PharmacyDashboard: React.FC = () => {
                             type="number"
                             value={editForm.price}
                             onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))}
-                            className="w-24 text-right px-2 py-1 rounded-lg border border-indigo-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="w-24 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
                             min={0}
                             step={0.01}
                           />
@@ -685,7 +685,7 @@ const PharmacyDashboard: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <span className="text-sm font-semibold text-indigo-700">
+                        <span className="text-sm font-semibold text-orange-700">
                           {bulkEditMode ? (
                             `₹${((parseInt(bulkForm[item.id]?.quantity) || 0) * (parseFloat(bulkForm[item.id]?.price) || 0)).toFixed(2)}`
                           ) : (
@@ -719,7 +719,7 @@ const PharmacyDashboard: React.FC = () => {
                             <>
                               <button
                                 onClick={() => handleEdit(item)}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                                className="p-2 rounded-lg text-slate-400 hover:bg-orange-50 hover:text-orange-600 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                                 title="Edit"
                               >
                                 <Edit3 className="h-4 w-4" />

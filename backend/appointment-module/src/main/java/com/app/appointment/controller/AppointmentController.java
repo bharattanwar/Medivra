@@ -66,4 +66,14 @@ public class AppointmentController {
             @RequestBody RescheduleAppointmentRequest request) {
         return ResponseEntity.ok(appointmentService.rescheduleAppointment(id, request));
     }
+
+    @PutMapping("/{id}/reschedule/accept")
+    public ResponseEntity<AppointmentResponse> acceptReschedule(@PathVariable UUID id) {
+        return ResponseEntity.ok(appointmentService.acceptReschedule(id));
+    }
+
+    @PutMapping("/{id}/reschedule/reject")
+    public ResponseEntity<AppointmentResponse> rejectReschedule(@PathVariable UUID id) {
+        return ResponseEntity.ok(appointmentService.rejectReschedule(id));
+    }
 }

@@ -13,6 +13,7 @@ import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
 import com.app.common.event.NotificationEvent;
 import com.app.common.event.RefundEvent;
+import com.app.common.event.RescheduleEvent;
 import com.app.common.entity.NotificationType;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,28 @@ public class AppointmentService {
 
         User patient = userRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new RuntimeException("Patient not found"));
+
+        // Check if patient is blocked
+        if (Boolean.TRUE.equals(patient.isBlocked())) {
+            if (patient.getBlockedUntil() != null && java.time.LocalDateTime.now().isAfter(patient.getBlockedUntil())) {
+                patient.setBlocked(false);
+                patient.setBlockedUntil(null);
+                userRepository.save(patient);
+            } else {
+                throw new RuntimeException("Your account is currently blocked.");
+            }
+        }
+
+        // Count patient's appointments created today
+        java.time.LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        java.time.LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59, 999999999);
+        long appointmentsToday = appointmentRepository.countAppointmentsForPatientToday(patient.getId(), startOfDay, endOfDay);
+        if (appointmentsToday >= 4) {
+            patient.setBlocked(true);
+            patient.setBlockedUntil(java.time.LocalDateTime.now().plusHours(24));
+            userRepository.save(patient);
+            throw new RuntimeException("Your account has been blocked for 24 hours due to excessive booking attempts.");
+        }
 
         Appointment appointment = new Appointment();
         appointment.setDoctor(doctor);
@@ -188,6 +211,17 @@ public class AppointmentService {
             throw new RuntimeException("Rescheduling is only allowed at least a day before the actual consultation date.");
         }
 
+        User patient = oldAppointment.getPatient();
+        if (Boolean.TRUE.equals(patient.isBlocked())) {
+            if (patient.getBlockedUntil() != null && java.time.LocalDateTime.now().isAfter(patient.getBlockedUntil())) {
+                patient.setBlocked(false);
+                patient.setBlockedUntil(null);
+                userRepository.save(patient);
+            } else {
+                throw new RuntimeException("Your account is currently blocked.");
+            }
+        }
+
         // Mark old appointment as RESCHEDULED
         oldAppointment.setStatus(AppointmentStatus.RESCHEDULED);
         oldAppointment.setCancellationReason("Rescheduled: " + (request.getReason() != null ? request.getReason() : "No reason provided"));
@@ -201,13 +235,10 @@ public class AppointmentService {
         newAppointment.setAppointmentDate(request.getNewDate());
         newAppointment.setTimeSlot(request.getNewTimeSlot());
         newAppointment.setRescheduledFrom(oldAppointment);
-
-        // If the old appointment was CONFIRMED (paid), the new one is also CONFIRMED
-        if (currentStatus == AppointmentStatus.CONFIRMED) {
-            newAppointment.setStatus(AppointmentStatus.CONFIRMED);
-        } else {
-            newAppointment.setStatus(AppointmentStatus.PENDING);
-        }
+        newAppointment.setPreviousStatus(currentStatus);
+        newAppointment.setStatus(AppointmentStatus.PENDING_RESCHEDULE);
+        newAppointment.setCancelledBy(request.getRescheduledBy());
+        newAppointment.setCancellationReason(request.getReason() != null ? request.getReason() : "No reason provided");
 
         Appointment savedNew = appointmentRepository.save(newAppointment);
 
@@ -288,5 +319,99 @@ public class AppointmentService {
             response.setRescheduledFromId(appointment.getRescheduledFrom().getId());
         }
         return response;
+    }
+
+    @Transactional
+    public AppointmentResponse acceptReschedule(UUID id) {
+        Appointment appointment = appointmentRepository.findByIdWithParties(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+
+        if (appointment.getStatus() != AppointmentStatus.PENDING_RESCHEDULE) {
+            throw new RuntimeException("Appointment is not pending reschedule");
+        }
+
+        AppointmentStatus prevStatus = appointment.getPreviousStatus();
+        if (prevStatus == AppointmentStatus.CONFIRMED) {
+            appointment.setStatus(AppointmentStatus.CONFIRMED);
+            // Move payment record from old appointment to the new one
+            if (appointment.getRescheduledFrom() != null) {
+                eventPublisher.publishEvent(new RescheduleEvent(this, appointment.getRescheduledFrom().getId(), appointment.getId(), true));
+            }
+        } else {
+            appointment.setStatus(AppointmentStatus.PENDING);
+        }
+
+        Appointment savedAppointment = appointmentRepository.save(appointment);
+
+        // Notify the user who requested the reschedule
+        UUID reschedulerId = appointment.getCancelledBy(); // stored who rescheduled it
+        UUID doctorUserId = appointment.getDoctor().getUserId();
+        UUID patientId = appointment.getPatient().getId();
+        UUID recipientId = reschedulerId;
+
+        try {
+            eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                recipientId,
+                "Reschedule Request Accepted",
+                String.format("Your request to reschedule the appointment with %s to %s at %s has been accepted.",
+                    reschedulerId.equals(doctorUserId) ? appointment.getPatient().getFullName() : "Dr. " + appointment.getDoctor().getUser().getFullName(),
+                    appointment.getAppointmentDate().toString(),
+                    appointment.getTimeSlot()),
+                NotificationType.APPOINTMENT_CONFIRMED,
+                appointment.getId().toString()
+            ));
+        } catch (Exception e) {
+            System.err.println("Failed to publish accept reschedule notification: " + e.getMessage());
+        }
+
+        return mapToResponse(savedAppointment);
+    }
+
+    @Transactional
+    public AppointmentResponse rejectReschedule(UUID id) {
+        Appointment appointment = appointmentRepository.findByIdWithParties(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+
+        if (appointment.getStatus() != AppointmentStatus.PENDING_RESCHEDULE) {
+            throw new RuntimeException("Appointment is not pending reschedule");
+        }
+
+        appointment.setStatus(AppointmentStatus.REJECTED);
+        appointment.setCancellationReason("Reschedule request rejected by the other party.");
+        Appointment savedAppointment = appointmentRepository.save(appointment);
+
+        // Refund if the original was paid
+        if (appointment.getPreviousStatus() == AppointmentStatus.CONFIRMED && appointment.getRescheduledFrom() != null) {
+            try {
+                eventPublisher.publishEvent(new RefundEvent(this, appointment.getRescheduledFrom().getId()));
+            } catch (Exception e) {
+                System.err.println("Failed to publish refund event: " + e.getMessage());
+            }
+        }
+
+        // Notify the user who requested the reschedule
+        UUID reschedulerId = appointment.getCancelledBy();
+        UUID doctorUserId = appointment.getDoctor().getUserId();
+        UUID patientId = appointment.getPatient().getId();
+        UUID recipientId = reschedulerId;
+
+        try {
+            eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                recipientId,
+                "Reschedule Request Rejected",
+                String.format("Your request to reschedule the appointment with %s to %s at %s was rejected. A refund will be initiated if applicable.",
+                    reschedulerId.equals(doctorUserId) ? appointment.getPatient().getFullName() : "Dr. " + appointment.getDoctor().getUser().getFullName(),
+                    appointment.getAppointmentDate().toString(),
+                    appointment.getTimeSlot()),
+                NotificationType.APPOINTMENT_REJECTED,
+                appointment.getId().toString()
+            ));
+        } catch (Exception e) {
+            System.err.println("Failed to publish reject reschedule notification: " + e.getMessage());
+        }
+
+        return mapToResponse(savedAppointment);
     }
 }
