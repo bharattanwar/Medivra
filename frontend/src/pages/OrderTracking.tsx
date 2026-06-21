@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, Truck, Calendar, Clock, Trash2, AlertCircle, Info,
-  RefreshCw, MapPin, Sparkles, X
+  RefreshCw, MapPin, Sparkles, X, CreditCard, Smartphone
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -26,6 +26,7 @@ interface MedicineOrder {
   patientId: string;
   prescriptionId?: string;
   status: string;
+  paymentMethod?: string;
   totalAmount: number;
   userLatitude: number;
   userLongitude: number;
@@ -130,9 +131,27 @@ const OrderTracking: React.FC = () => {
     switch (status.toUpperCase()) {
       case 'DELIVERED': return 'bg-green-100 text-green-800 border-green-200';
       case 'PROCESSING': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'PAID': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'CONFIRMED': return 'bg-teal-100 text-teal-800 border-teal-200';
       case 'PENDING': return 'bg-amber-100 text-amber-800 border-amber-200';
       default: return 'bg-slate-100 text-slate-800 border-slate-200';
     }
+  };
+
+  const getPaymentBadge = (order: MedicineOrder) => {
+    const isCod = order.paymentMethod === 'cod';
+    if (isCod) {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+          <Truck className="h-3 w-3" /> Pay on Delivery
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+        <Smartphone className="h-3 w-3" /> Paid Online
+      </span>
+    );
   };
 
   return (
@@ -197,13 +216,14 @@ const OrderTracking: React.FC = () => {
                   >
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-100">
                       <div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg">
                             ORDER ID: {order.id.slice(0, 8).toUpperCase()}
                           </span>
                           <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${getParentStatusClass(order.status)}`}>
                             {order.status}
                           </span>
+                          {getPaymentBadge(order)}
                         </div>
                         <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5" /> Order Placed:{' '}

@@ -11,6 +11,7 @@ public class MedicineOrderResponse {
     private UUID patientId;
     private UUID prescriptionId;
     private String status;
+    private String paymentMethod;
     private BigDecimal totalAmount;
     private Double userLatitude;
     private Double userLongitude;
@@ -48,6 +49,14 @@ public class MedicineOrderResponse {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 
     public BigDecimal getTotalAmount() {

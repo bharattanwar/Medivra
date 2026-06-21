@@ -12,6 +12,7 @@ public class CheckoutRequest {
     private Double userLatitude;
     private Double userLongitude;
     private List<CheckoutItem> items;
+    private String paymentMethod; // "online" | "cod"
 
     public UUID getPatientId() {
         return patientId;
@@ -59,6 +60,14 @@ public class CheckoutRequest {
 
     public void setItems(List<CheckoutItem> items) {
         this.items = items;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 
     public static class CheckoutItem {

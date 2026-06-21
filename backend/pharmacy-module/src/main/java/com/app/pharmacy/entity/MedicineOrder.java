@@ -32,6 +32,9 @@ public class MedicineOrder extends BaseEntity {
     @Column(name = "delivery_address", nullable = false, columnDefinition = "TEXT")
     private String deliveryAddress;
 
+    @Column(name = "payment_method", length = 50)
+    private String paymentMethod;
+
     public UUID getPatientId() {
         return patientId;
     }
@@ -86,5 +89,13 @@ public class MedicineOrder extends BaseEntity {
 
     public void setDeliveryAddress(String deliveryAddress) {
         this.deliveryAddress = deliveryAddress;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 }

@@ -91,7 +91,15 @@ public class MedicineOrderService {
         parentOrder.setUserLatitude(request.getUserLatitude());
         parentOrder.setUserLongitude(request.getUserLongitude());
         parentOrder.setTotalAmount(total);
-        parentOrder.setStatus("PAID"); // unified ordering experience automatically confirms payment/checkout
+
+        // Determine payment method and initial status
+        String method = request.getPaymentMethod() != null ? request.getPaymentMethod().toLowerCase() : "online";
+        parentOrder.setPaymentMethod(method);
+        if ("cod".equals(method)) {
+            parentOrder.setStatus("CONFIRMED"); // COD: confirmed, payment on delivery
+        } else {
+            parentOrder.setStatus("PAID"); // Online: payment received immediately
+        }
         
         MedicineOrder savedParent = orderRepository.save(parentOrder);
 
@@ -240,6 +248,7 @@ public class MedicineOrderService {
         resp.setPatientId(p.getPatientId());
         resp.setPrescriptionId(p.getPrescriptionId());
         resp.setStatus(p.getStatus());
+        resp.setPaymentMethod(p.getPaymentMethod());
         resp.setTotalAmount(p.getTotalAmount());
         resp.setUserLatitude(p.getUserLatitude());
         resp.setUserLongitude(p.getUserLongitude());

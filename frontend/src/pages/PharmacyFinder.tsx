@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   MapPin, Phone, Package, Pill, Loader2, AlertCircle, Search,
   Navigation, Plus, Minus, CheckCircle2, ShoppingCart,
-  X, Sparkles, FileText, Upload
+  X, Sparkles, FileText, Upload, CreditCard, Truck, Smartphone
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -135,6 +135,9 @@ const PharmacyFinder: React.FC = () => {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'address' | 'method' | 'processing'>('address');
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod' | null>(null);
+  const [paymentError, setPaymentError] = useState('');
 
   const patientId = localStorage.getItem('userId');
 
@@ -406,38 +409,40 @@ const PharmacyFinder: React.FC = () => {
     }
   };
 
-  // Place single checkout order
-  const handleCheckout = async () => {
-    if (!matchResult || !deliveryAddress.trim() || !patientId) return;
+  // Build order payload helper
+  const buildOrderPayload = () => {
+    if (!matchResult || !patientId) return null;
     const loc = matchLocation || userLocation;
-    if (!loc) return;
-
-    try {
-      setCheckoutLoading(true);
-      
-      // Build order items
-      const checkoutItems: any[] = [];
-      matchResult.allocations.forEach(alloc => {
-        alloc.items.forEach(item => {
-          checkoutItems.push({
-            pharmacyId: alloc.pharmacyId,
-            medicineId: item.medicineId,
-            quantity: item.quantity,
-            price: item.unitPrice
-          });
+    if (!loc) return null;
+    const checkoutItems: any[] = [];
+    matchResult.allocations.forEach(alloc => {
+      alloc.items.forEach(item => {
+        checkoutItems.push({
+          pharmacyId: alloc.pharmacyId,
+          medicineId: item.medicineId,
+          quantity: item.quantity,
+          price: item.unitPrice
         });
       });
+    });
+    return {
+      patientId,
+      prescriptionId: activeRecordId || null,
+      deliveryAddress: deliveryAddress.trim(),
+      userLatitude: loc.lat,
+      userLongitude: loc.lng,
+      items: checkoutItems
+    };
+  };
 
-      const payload = {
-        patientId,
-        prescriptionId: activeRecordId || null,
-        deliveryAddress: deliveryAddress.trim(),
-        userLatitude: loc.lat,
-        userLongitude: loc.lng,
-        items: checkoutItems
-      };
-
-      const res = await api.post('/medicine-orders/checkout', payload);
+  // Place order in backend
+  const placeOrderInBackend = async (method: 'online' | 'cod') => {
+    const payload = buildOrderPayload();
+    if (!payload) return;
+    setCheckoutLoading(true);
+    setPaymentError('');
+    try {
+      const res = await api.post('/medicine-orders/checkout', { ...payload, paymentMethod: method });
       if (res.data.success) {
         setCheckoutSuccess(true);
         setTimeout(() => {
@@ -445,15 +450,49 @@ const PharmacyFinder: React.FC = () => {
           setBasket([]);
           setIdentifiedItems([]);
           setMatchResult(null);
+          setPaymentStep('address');
+          setPaymentMethod(null);
           navigate('/patient/orders');
         }, 2000);
       }
     } catch (err) {
       console.error(err);
-      alert('Checkout failed. Please check payment/delivery detail details.');
+      setPaymentError('Order placement failed. Please try again.');
+      setPaymentStep('method');
     } finally {
       setCheckoutLoading(false);
     }
+  };
+
+  // Handle payment method confirmation
+  const handlePaymentConfirm = async () => {
+    if (!paymentMethod) return;
+    setPaymentStep('processing');
+
+    if (paymentMethod === 'cod') {
+      await placeOrderInBackend('cod');
+      return;
+    }
+
+    // Simulate online payment gateway (Razorpay / UPI mock)
+    try {
+      setCheckoutLoading(true);
+      // Simulate a 1.5s payment gateway processing animation
+      await new Promise(r => setTimeout(r, 1500));
+      await placeOrderInBackend('online');
+    } catch {
+      setPaymentError('Payment gateway error. Try again.');
+      setPaymentStep('method');
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Step 1 — proceed to payment method selection
+  const handleCheckout = () => {
+    if (!matchResult || !deliveryAddress.trim() || !patientId) return;
+    setPaymentMethod(null);
+    setPaymentError('');
+    setPaymentStep('method');
   };
 
   // Render helpers
@@ -1114,34 +1153,152 @@ const PharmacyFinder: React.FC = () => {
                   {/* Checkout Form */}
                   <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                      <ShoppingCart className="h-4 w-4 text-indigo-600" /> Unified Checkout
+                      <ShoppingCart className="h-4 w-4 text-indigo-600" /> Checkout
+                      <span className="ml-auto text-xs font-normal text-slate-400">
+                        {paymentStep === 'address' ? 'Step 1 of 2 — Delivery' : 'Step 2 of 2 — Payment'}
+                      </span>
                     </h3>
-                    
-                    <div className="space-y-1">
-                      <label className="block text-xs font-semibold text-slate-500">Delivery Address</label>
-                      <input
-                        type="text"
-                        value={deliveryAddress}
-                        onChange={e => setDeliveryAddress(e.target.value)}
-                        placeholder="Enter your complete home/office delivery address..."
-                        className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        required
-                      />
-                    </div>
 
-                    {checkoutSuccess ? (
-                      <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
-                        ✓ Checkout successful! Redirecting to tracking center…
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleCheckout}
-                        disabled={checkoutLoading || !deliveryAddress.trim()}
-                        className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {checkoutLoading ? 'Processing Checkout Payment…' : `Place Order (₹${Number(matchResult.totalAmount).toFixed(2)})`}
-                      </button>
+                    {/* Step 1: Delivery Address */}
+                    {(paymentStep === 'address') && (
+                      <>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-slate-500">Delivery Address</label>
+                          <input
+                            type="text"
+                            value={deliveryAddress}
+                            onChange={e => setDeliveryAddress(e.target.value)}
+                            placeholder="Enter your complete home/office delivery address..."
+                            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            required
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCheckout}
+                          disabled={!deliveryAddress.trim()}
+                          className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <CreditCard className="h-4 w-4" /> Continue to Payment
+                        </button>
+                      </>
+                    )}
+
+                    {/* Step 2: Payment Method Selection */}
+                    {(paymentStep === 'method' || paymentStep === 'processing') && (
+                      <>
+                        {/* Delivery address summary */}
+                        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                          <div>
+                            <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Delivering to</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{deliveryAddress}</p>
+                          </div>
+                          {paymentStep === 'method' && (
+                            <button
+                              type="button"
+                              onClick={() => setPaymentStep('address')}
+                              className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
+                            >
+                              Change
+                            </button>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-slate-500 mb-3">Select Payment Method</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Online / UPI */}
+                            <button
+                              type="button"
+                              disabled={paymentStep === 'processing'}
+                              onClick={() => setPaymentMethod('online')}
+                              className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                                paymentMethod === 'online'
+                                  ? 'border-indigo-600 bg-indigo-50 shadow-md shadow-indigo-100'
+                                  : 'border-slate-200 hover:border-indigo-300 bg-white'
+                              } disabled:opacity-60 disabled:cursor-not-allowed`}
+                            >
+                              {paymentMethod === 'online' && (
+                                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-indigo-600" />
+                              )}
+                              <div className="flex items-center gap-2">
+                                <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                                  <Smartphone className="h-5 w-5 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800">UPI / Online</p>
+                                  <p className="text-[11px] text-slate-400">Razorpay · Cards · Net Banking</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">Instant Confirmation</span>
+                            </button>
+
+                            {/* Cash on Delivery */}
+                            <button
+                              type="button"
+                              disabled={paymentStep === 'processing'}
+                              onClick={() => setPaymentMethod('cod')}
+                              className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                                paymentMethod === 'cod'
+                                  ? 'border-emerald-600 bg-emerald-50 shadow-md shadow-emerald-100'
+                                  : 'border-slate-200 hover:border-emerald-300 bg-white'
+                              } disabled:opacity-60 disabled:cursor-not-allowed`}
+                            >
+                              {paymentMethod === 'cod' && (
+                                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-emerald-600" />
+                              )}
+                              <div className="flex items-center gap-2">
+                                <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                                  <Truck className="h-5 w-5 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800">Pay on Delivery</p>
+                                  <p className="text-[11px] text-slate-400">Cash / Card at doorstep</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Pay when received</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {paymentError && (
+                          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0" /> {paymentError}
+                          </div>
+                        )}
+
+                        {checkoutSuccess ? (
+                          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+                            ✓ Order confirmed! Redirecting to order tracking…
+                          </div>
+                        ) : paymentStep === 'processing' ? (
+                          <div className="flex flex-col items-center py-6 gap-3">
+                            <div className="h-12 w-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
+                            <p className="text-sm font-semibold text-slate-600">
+                              {paymentMethod === 'cod' ? 'Placing your order…' : 'Connecting to payment gateway…'}
+                            </p>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handlePaymentConfirm}
+                            disabled={!paymentMethod || checkoutLoading}
+                            className={`w-full py-3 font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 ${
+                              paymentMethod === 'cod'
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
+                                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white'
+                            }`}
+                          >
+                            {paymentMethod === 'cod' ? (
+                              <><Truck className="h-4 w-4" /> Place Order — Pay on Delivery</>
+                            ) : paymentMethod === 'online' ? (
+                              <><Smartphone className="h-4 w-4" /> Pay ₹{Number(matchResult.totalAmount).toFixed(2)} Online</>
+                            ) : (
+                              'Select a payment method above'
+                            )}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
