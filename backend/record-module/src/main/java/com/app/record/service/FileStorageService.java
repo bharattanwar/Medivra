@@ -25,8 +25,8 @@ public class FileStorageService {
     }
 
     public String save(MultipartFile file) {
-        if (file.getSize() > 100 * 1024) {
-            throw new RuntimeException("File size exceeds 100 KB limit");
+        if (file.getSize() > 10 * 1024 * 1024) {
+            throw new RuntimeException("File size exceeds 10 MB limit");
         }
 
         try {

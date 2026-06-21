@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, Plus, Trash2, Edit3, Check, X, Search,
   Building2, MapPin, Phone, RefreshCw, AlertCircle, Loader2,
-  FileText, Download, CheckSquare
+  FileText, Download, CheckSquare, ShoppingCart, Clock, ArrowRight
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -34,11 +34,33 @@ interface EditForm {
   price: string;
 }
 
+interface PharmacyOrderItem {
+  id: string;
+  orderId: string;
+  pharmacyId: string;
+  pharmacyName: string;
+  medicineId: string;
+  medicineName: string;
+  quantity: number;
+  price: number;
+  status: string;
+  deliveryEstimate: string;
+  explanation: string;
+  instructions: string;
+  sideEffects: string;
+}
+
 const PharmacyDashboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders'>('inventory');
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [profile, setProfile] = useState<PharmacyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Orders State
+  const [orders, setOrders] = useState<PharmacyOrderItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState('');
 
   // Add medicine form
   const [showAdd, setShowAdd] = useState(false);
@@ -73,12 +95,10 @@ const PharmacyDashboard: React.FC = () => {
   const fetchProfile = useCallback(async () => {
     try {
       const res = await api.get('/pharmacies/profile');
-      // If endpoint doesn't exist, we fallback
       if (res.data.success) {
         setProfile(res.data.data);
       }
     } catch {
-      // Fallback details
       setProfile({
         name: 'Apollo Pharmacy',
         address: '12 MG Road, Bengaluru, Karnataka 560001',
@@ -106,10 +126,36 @@ const PharmacyDashboard: React.FC = () => {
     }
   }, []);
 
+  const fetchOrders = useCallback(async () => {
+    try {
+      setOrdersLoading(true);
+      setOrdersError('');
+      const res = await api.get('/medicine-orders/pharmacy');
+      if (res.data.success) {
+        setOrders(res.data.data);
+      }
+    } catch {
+      setOrdersError('Failed to load incoming orders.');
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchProfile();
     fetchInventory();
-  }, [fetchProfile, fetchInventory]);
+    fetchOrders();
+  }, [fetchProfile, fetchInventory, fetchOrders]);
+
+  // Handle Tab Switch
+  const handleTabSwitch = (tab: 'inventory' | 'orders') => {
+    setActiveTab(tab);
+    if (tab === 'orders') {
+      fetchOrders();
+    } else {
+      fetchInventory();
+    }
+  };
 
   // Medicine search debounce
   useEffect(() => {
@@ -321,11 +367,32 @@ const PharmacyDashboard: React.FC = () => {
     printWindow.document.close();
   };
 
+  const handleUpdateStatus = async (itemId: string, status: string) => {
+    try {
+      const res = await api.put(`/medicine-orders/items/${itemId}/status?status=${status}`);
+      if (res.data.success) {
+        await fetchOrders();
+      }
+    } catch {
+      alert('Failed to update status.');
+    }
+  };
+
   const filteredInventory = inventory.filter(item =>
     item.medicineName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalValue = inventory.reduce((sum, item) => sum + item.quantity * item.price, 0);
+
+  // Status Classes
+  const getItemStatusClass = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'DELIVERED': return 'bg-green-100 text-green-800 border-green-200';
+      case 'SHIPPED': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'PREPARING': return 'bg-amber-100 text-amber-800 border-amber-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -356,6 +423,8 @@ const PharmacyDashboard: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Quick Stats */}
             <div className="flex gap-3">
               <div className="bg-white/15 backdrop-blur rounded-2xl px-5 py-4 text-center min-w-[110px]">
                 <p className="text-2xl font-bold">{inventory.length}</p>
@@ -367,387 +436,502 @@ const PharmacyDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Sub Navigation Tabs */}
+          <div className="mt-8 flex gap-2 p-1.5 bg-orange-700/30 backdrop-blur rounded-2xl w-max">
+            <button
+              onClick={() => handleTabSwitch('inventory')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                activeTab === 'inventory'
+                  ? 'bg-white text-orange-700 shadow-md'
+                  : 'text-orange-100 hover:text-white'
+              }`}
+            >
+              <Package className="h-4 w-4" /> Inventory Management
+            </button>
+            <button
+              onClick={() => handleTabSwitch('orders')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                activeTab === 'orders'
+                  ? 'bg-white text-orange-700 shadow-md'
+                  : 'text-orange-100 hover:text-white'
+              }`}
+            >
+              <ShoppingCart className="h-4 w-4" /> Order Requests
+              {orders.filter(o => o.status === 'PENDING').length > 0 && (
+                <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                  {orders.filter(o => o.status === 'PENDING').length}
+                </span>
+              )}
+            </button>
+          </div>
+
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" /> {error}
-          </div>
-        )}
+        
+        {/* INVENTORY TAB */}
+        {activeTab === 'inventory' && (
+          <>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" /> {error}
+              </div>
+            )}
 
-        {/* Toolbar */}
-        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search medicines by name…"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
-            />
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            {/* Export Buttons */}
-            <button
-              onClick={handleExportCSV}
-              disabled={inventory.length === 0}
-              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              <Download className="h-4 w-4 text-emerald-600" /> Excel/CSV
-            </button>
-            <button
-              onClick={handlePrintPDF}
-              disabled={inventory.length === 0}
-              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              <FileText className="h-4 w-4 text-orange-600" /> Print PDF
-            </button>
-            
-            <div className="h-8 w-[1px] bg-slate-200 hidden sm:block self-center mx-1" />
+            {/* Toolbar */}
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search medicines by name…"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
+                />
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleExportCSV}
+                  disabled={inventory.length === 0}
+                  className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="h-4 w-4 text-emerald-600" /> Excel/CSV
+                </button>
+                <button
+                  onClick={handlePrintPDF}
+                  disabled={inventory.length === 0}
+                  className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <FileText className="h-4 w-4 text-orange-600" /> Print PDF
+                </button>
+                
+                <div className="h-8 w-[1px] bg-slate-200 hidden sm:block self-center mx-1" />
 
-            <button
-              onClick={toggleBulkEdit}
-              disabled={inventory.length === 0}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                bulkEditMode
-                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                  : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
-              }`}
-            >
-              <CheckSquare className="h-4 w-4 text-amber-600" /> {bulkEditMode ? 'Cancel Bulk' : 'Bulk Edit'}
-            </button>
+                <button
+                  onClick={toggleBulkEdit}
+                  disabled={inventory.length === 0}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    bulkEditMode
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                      : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <CheckSquare className="h-4 w-4 text-amber-600" /> {bulkEditMode ? 'Cancel Bulk' : 'Bulk Edit'}
+                </button>
 
-            <button
-              onClick={fetchInventory}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-orange-600 transition-colors cursor-pointer"
-              title="Refresh"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-            
-            <button
-              id="add-medicine-btn"
-              onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md shadow-orange-100 cursor-pointer"
-            >
-              <Plus className="h-4 w-4" /> Add Medicine
-            </button>
-          </div>
-        </div>
-
-        {/* Add Medicine Panel */}
-        {showAdd && (
-          <div className="bg-white rounded-2xl border border-orange-100 shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-4 border-b border-orange-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <Plus className="h-4 w-4 text-orange-600" /> Add Inventory Item
-              </h3>
-              <button onClick={() => { setShowAdd(false); setAddError(''); }} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg">
-                <X className="h-4 w-4" />
-              </button>
+                <button
+                  onClick={fetchInventory}
+                  className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-orange-600 transition-colors cursor-pointer"
+                  title="Refresh"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+                
+                <button
+                  id="add-medicine-btn"
+                  onClick={() => setShowAdd(true)}
+                  className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md shadow-orange-100 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" /> Add Medicine
+                </button>
+              </div>
             </div>
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-              {addError && (
-                <div className="bg-red-50 text-red-700 text-sm px-4 py-2.5 rounded-xl border border-red-100">
-                  {addError}
+
+            {/* Add Medicine Panel */}
+            {showAdd && (
+              <div className="bg-white rounded-2xl border border-orange-100 shadow-lg overflow-hidden animate-scale-in">
+                <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-4 border-b border-orange-100 flex items-center justify-between">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-orange-600" /> Add Inventory Item
+                  </h3>
+                  <button onClick={() => { setShowAdd(false); setAddError(''); }} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg cursor-pointer">
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-              )}
-              {/* Medicine search */}
-              <div className="relative space-y-1">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Medicine Name <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  {suggestionLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-400 animate-spin" />
+
+                <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+                  {addError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0" /> {addError}
+                    </div>
                   )}
-                  <input
-                    type="text"
-                    value={medicineQuery}
-                    onChange={e => {
-                      setMedicineQuery(e.target.value);
-                      setAddForm(prev => ({ ...prev, medicineName: e.target.value }));
-                      setSelectedMedicineId(null);
-                    }}
-                    placeholder="Search existing medicines or type a new name…"
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-                {medicineSuggestions.length > 0 && (
-                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-                    {medicineSuggestions.map(m => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedMedicineId(m.id);
-                          setMedicineQuery(m.name);
-                          setAddForm(prev => ({
-                            ...prev,
-                            medicineName: m.name,
-                            strength: m.strength || '',
-                          }));
-                          setMedicineSuggestions([]);
-                        }}
-                        className="w-full text-left px-4 py-3 hover:bg-orange-50 border-b border-slate-100 last:border-b-0 transition-colors"
-                      >
-                        <p className="text-sm font-semibold text-slate-800">{m.name}</p>
-                        <p className="text-xs text-slate-400">{m.strength && `Strength: ${m.strength}`}</p>
-                      </button>
-                    ))}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1 relative">
+                      <label className="text-xs font-bold text-slate-600">Medicine Name</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          value={medicineQuery}
+                          onChange={e => {
+                            setMedicineQuery(e.target.value);
+                            setAddForm(prev => ({ ...prev, medicineName: e.target.value }));
+                            setSelectedMedicineId(null);
+                          }}
+                          placeholder="Search database (e.g. Paracetamol)…"
+                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
+                          required
+                        />
+                      </div>
+                      
+                      {suggestionLoading && (
+                        <div className="absolute right-3 top-[38px]">
+                          <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                        </div>
+                      )}
+
+                      {medicineSuggestions.length > 0 && (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-40 overflow-y-auto">
+                          {medicineSuggestions.map(m => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMedicineId(m.id);
+                                setAddForm(prev => ({ ...prev, medicineName: m.name, strength: m.strength || '' }));
+                                setMedicineQuery(m.name);
+                                setMedicineSuggestions([]);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-orange-50 border-b border-slate-100 last:border-b-0 text-sm transition-colors cursor-pointer"
+                            >
+                              <span className="font-semibold text-slate-800">{m.name}</span> {m.strength && `· ${m.strength}`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-600">Strength (e.g. 500mg)</label>
+                      <input
+                        type="text"
+                        value={addForm.strength}
+                        onChange={e => setAddForm(prev => ({ ...prev, strength: e.target.value }))}
+                        placeholder="Strength"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 outline-none"
+                        disabled={selectedMedicineId !== null}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-600">Quantity (Units)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={addForm.quantity}
+                        onChange={e => setAddForm(prev => ({ ...prev, quantity: e.target.value }))}
+                        placeholder="e.g. 100"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-600">Price per unit (INR)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={addForm.price}
+                        onChange={e => setAddForm(prev => ({ ...prev, price: e.target.value }))}
+                        placeholder="e.g. 12.50"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 outline-none"
+                        required
+                      />
+                    </div>
                   </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowAdd(false); setAddError(''); }}
+                      className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={addLoading}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2 rounded-xl font-bold text-sm shadow-md transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {addLoading ? 'Saving…' : 'Save Item'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Inventory List Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900">Inventory Stock List</h2>
+                {bulkEditMode && (
+                  <button
+                    onClick={handleBulkSave}
+                    disabled={bulkLoading}
+                    className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors shadow shadow-green-100 cursor-pointer"
+                  >
+                    {bulkLoading ? 'Saving…' : 'Save Bulk Changes'}
+                  </button>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Strength / Dosage</label>
-                  <input
-                    type="text"
-                    value={addForm.strength}
-                    onChange={e => setAddForm(prev => ({ ...prev, strength: e.target.value }))}
-                    placeholder="e.g. 500mg"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
+              {loading ? (
+                <div className="flex justify-center py-20">
+                  <div className="h-10 w-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Quantity (units) <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={addForm.quantity}
-                    onChange={e => setAddForm(prev => ({ ...prev, quantity: e.target.value }))}
-                    placeholder="100"
-                    required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
+              ) : filteredInventory.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <Package className="h-12 w-12 mx-auto text-slate-200 mb-2" />
+                  <p className="text-sm">No items found matching your filters.</p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Price per unit (₹) <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={addForm.price}
-                    onChange={e => setAddForm(prev => ({ ...prev, price: e.target.value }))}
-                    placeholder="25.00"
-                    required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-              </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold text-xs uppercase">
+                        <th className="px-6 py-3">Medicine Details</th>
+                        <th className="px-6 py-3">Strength</th>
+                        <th className="px-6 py-3 text-right">Quantity In Stock</th>
+                        <th className="px-6 py-3 text-right">Price per unit</th>
+                        <th className="px-6 py-3 text-right">Valuation</th>
+                        <th className="px-6 py-3 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredInventory.map(item => {
+                        const isEditing = editingId === item.id;
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/50">
+                            <td className="px-6 py-4">
+                              <span className="font-bold text-slate-800 block">{item.medicineName}</span>
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              {item.strength || '—'}
+                            </td>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowAdd(false); setAddError(''); }}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addLoading || !medicineQuery}
-                  className="flex-1 flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60 cursor-pointer"
-                >
-                  {addLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Adding…</> : <><Check className="h-4 w-4" /> Add to Inventory</>}
-                </button>
-              </div>
-            </form>
-          </div>
+                            {/* Quantity column */}
+                            <td className="px-6 py-4 text-right">
+                              {bulkEditMode ? (
+                                <input
+                                  type="number"
+                                  value={bulkForm[item.id]?.quantity || ''}
+                                  onChange={e => handleBulkChange(item.id, 'quantity', e.target.value)}
+                                  className="w-20 text-right px-2 py-1 rounded-lg border border-orange-350 text-sm bg-white"
+                                />
+                              ) : isEditing ? (
+                                <input
+                                  type="number"
+                                  value={editForm.quantity}
+                                  onChange={e => setEditForm(prev => ({ ...prev, quantity: e.target.value }))}
+                                  className="w-20 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm bg-white focus:ring-2 focus:ring-orange-500 outline-none animate-fade-in"
+                                />
+                              ) : (
+                                <span className={`font-semibold text-sm ${item.quantity <= 10 ? 'text-red-600 font-black' : 'text-slate-800'}`}>
+                                  {item.quantity} {item.quantity <= 10 && '⚠️ Low Stock'}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Price column */}
+                            <td className="px-6 py-4 text-right">
+                              {bulkEditMode ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={bulkForm[item.id]?.price || ''}
+                                  onChange={e => handleBulkChange(item.id, 'price', e.target.value)}
+                                  className="w-24 text-right px-2 py-1 rounded-lg border border-orange-350 text-sm bg-white"
+                                />
+                              ) : isEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editForm.price}
+                                  onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))}
+                                  className="w-24 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm bg-white focus:ring-2 focus:ring-orange-500 outline-none animate-fade-in"
+                                />
+                              ) : (
+                                <span className="font-semibold text-slate-800">₹{Number(item.price).toFixed(2)}</span>
+                              )}
+                            </td>
+
+                            {/* Valuation */}
+                            <td className="px-6 py-4 text-right text-slate-700 font-bold">
+                              ₹{(item.quantity * item.price).toFixed(2)}
+                            </td>
+
+                            {/* Actions Column */}
+                            <td className="px-6 py-4 text-center">
+                              {bulkEditMode ? (
+                                <span className="text-xs text-slate-400 font-semibold">—</span>
+                              ) : isEditing ? (
+                                <div className="flex justify-center gap-1">
+                                  <button
+                                    onClick={() => handleEditSave(item.id)}
+                                    disabled={editLoading}
+                                    className="p-1 rounded bg-green-50 text-green-600 hover:bg-green-100"
+                                    title="Save"
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    className="p-1 rounded bg-slate-50 text-slate-500 hover:bg-slate-100"
+                                    title="Cancel"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex justify-center gap-1.5">
+                                  <button
+                                    onClick={() => handleEdit(item)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50/50 transition-colors cursor-pointer"
+                                    title="Edit"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(item.id)}
+                                    disabled={deletingId === item.id}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                    title="Delete"
+                                  >
+                                    {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {/* Inventory Table */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800 flex items-center gap-2">
-              <Package className="h-5 w-5 text-orange-500" /> Inventory
-              <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full ml-1">
-                {filteredInventory.length}
-              </span>
-            </h2>
-            {bulkEditMode && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleBulkSave}
-                  disabled={bulkLoading}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save All Changes
-                </button>
-                <button
-                  onClick={() => setBulkEditMode(false)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
+        {/* ORDER REQUESTS TAB */}
+        {activeTab === 'orders' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-orange-600" /> Incoming Deliveries
+              </h2>
+              <button
+                onClick={fetchOrders}
+                className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-orange-600 transition-colors cursor-pointer shadow-sm"
+                title="Refresh Deliveries"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
+
+            {ordersLoading ? (
+              <div className="flex justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-orange-500" />
+              </div>
+            ) : ordersError ? (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl flex items-center gap-3">
+                <AlertCircle className="h-5 w-5" />
+                <p className="text-sm">{ordersError}</p>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-slate-300">
+                <ShoppingCart className="h-14 w-14 text-slate-200 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-slate-700 mb-1">No Orders Assigned</h3>
+                <p className="text-slate-400 text-sm max-w-sm mx-auto">
+                  Your pharmacy has no pending customer delivery requests right now.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {orders.map(orderItem => (
+                  <div key={orderItem.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all">
+                    
+                    {/* Item header */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg">
+                            ORDER ITEM ID: {orderItem.id.slice(0, 8).toUpperCase()}
+                          </span>
+                          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${getItemStatusClass(orderItem.status)}`}>
+                            {orderItem.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1.5">
+                          Delivery Route Time Limit: <strong className="text-orange-700">{orderItem.deliveryEstimate}</strong>
+                        </p>
+                      </div>
+                      
+                      {/* Price and qty */}
+                      <div className="text-right">
+                        <span className="text-xs text-slate-400 font-medium">Earnings</span>
+                        <p className="font-extrabold text-slate-900 text-lg">₹{Number(orderItem.price * orderItem.quantity).toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {/* Content Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600">
+                      <div className="space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                        <p className="font-bold text-slate-800 mb-1.5 uppercase tracking-wider text-[10px]">📦 Medication Detail</p>
+                        <p>Medicine Name: <strong className="text-slate-900">{orderItem.medicineName}</strong></p>
+                        <p>Total Quantity: <strong className="text-slate-900">{orderItem.quantity} unit(s)</strong></p>
+                        <p>Unit Price: <strong className="text-slate-900">₹{Number(orderItem.price).toFixed(2)}</strong></p>
+                      </div>
+                      
+                      {/* Update actions */}
+                      <div className="flex flex-col justify-center space-y-2">
+                        <p className="font-bold text-slate-800 text-[10px] uppercase tracking-wider">⚙ Shipment Action</p>
+                        <div className="flex gap-2">
+                          {orderItem.status === 'PENDING' && (
+                            <button
+                              onClick={() => handleUpdateStatus(orderItem.id, 'PREPARING')}
+                              className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-100 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            >
+                              Accept & Prepare <Clock className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {orderItem.status === 'PREPARING' && (
+                            <button
+                              onClick={() => handleUpdateStatus(orderItem.id, 'SHIPPED')}
+                              className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            >
+                              Dispatch to Delivery agent <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {orderItem.status === 'SHIPPED' && (
+                            <button
+                              onClick={() => handleUpdateStatus(orderItem.id, 'DELIVERED')}
+                              className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            >
+                              Mark Delivered ✓
+                            </button>
+                          )}
+                          {orderItem.status === 'DELIVERED' && (
+                            <div className="flex-1 bg-green-50 text-green-700 border border-green-200 text-center py-2.5 rounded-xl font-bold flex items-center justify-center gap-1">
+                              ✓ Completed Fulfilling Order
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
+        )}
 
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <Loader2 className="h-8 w-8 text-orange-500 animate-spin" />
-              <p className="text-slate-400 text-sm">Loading inventory…</p>
-            </div>
-          ) : filteredInventory.length === 0 ? (
-            <div className="text-center py-20">
-              <Package className="h-14 w-14 text-slate-200 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-900 mb-1">No medicines yet</h3>
-              <p className="text-slate-400 text-sm mb-6">Add your first inventory item to get started.</p>
-              <button
-                onClick={() => setShowAdd(true)}
-                className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
-              >
-                <Plus className="h-4 w-4" /> Add Medicine
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">Medicine</th>
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Strength</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Quantity</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Price/Unit</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Stock Value</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredInventory.map(item => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900 text-sm">{item.medicineName}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                          {item.strength || '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        {bulkEditMode ? (
-                          <input
-                            type="number"
-                            value={bulkForm[item.id]?.quantity || ''}
-                            onChange={e => handleBulkChange(item.id, 'quantity', e.target.value)}
-                            className="w-20 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                            min={0}
-                          />
-                        ) : editingId === item.id ? (
-                          <input
-                            type="number"
-                            value={editForm.quantity}
-                            onChange={e => setEditForm(prev => ({ ...prev, quantity: e.target.value }))}
-                            className="w-20 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                            min={0}
-                          />
-                        ) : (
-                          <span className={`text-sm font-semibold ${item.quantity < 10 ? 'text-red-600' : 'text-slate-800'}`}>
-                            {item.quantity}
-                            {item.quantity < 10 && (
-                              <span className="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md">Low</span>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        {bulkEditMode ? (
-                          <input
-                            type="number"
-                            value={bulkForm[item.id]?.price || ''}
-                            onChange={e => handleBulkChange(item.id, 'price', e.target.value)}
-                            className="w-24 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                            min={0}
-                            step={0.01}
-                          />
-                        ) : editingId === item.id ? (
-                          <input
-                            type="number"
-                            value={editForm.price}
-                            onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))}
-                            className="w-24 text-right px-2 py-1 rounded-lg border border-orange-300 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                            min={0}
-                            step={0.01}
-                          />
-                        ) : (
-                          <span className="text-sm text-slate-700">₹{Number(item.price).toFixed(2)}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <span className="text-sm font-semibold text-orange-700">
-                          {bulkEditMode ? (
-                            `₹${((parseInt(bulkForm[item.id]?.quantity) || 0) * (parseFloat(bulkForm[item.id]?.price) || 0)).toFixed(2)}`
-                          ) : (
-                            `₹${(item.quantity * item.price).toFixed(2)}`
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {bulkEditMode ? (
-                            <span className="text-xs text-slate-400 font-semibold italic">Bulk Editing</span>
-                          ) : editingId === item.id ? (
-                            <>
-                              <button
-                                onClick={() => handleEditSave(item.id)}
-                                disabled={editLoading}
-                                className="p-2 rounded-lg bg-green-100 text-green-600 hover:bg-green-200 transition-colors disabled:opacity-60 cursor-pointer"
-                                title="Save"
-                              >
-                                {editLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                              </button>
-                              <button
-                                onClick={() => setEditingId(null)}
-                                className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
-                                title="Cancel"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => handleEdit(item)}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-orange-50 hover:text-orange-600 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
-                                title="Edit"
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Remove "${item.medicineName}" from inventory?`)) handleDelete(item.id);
-                                }}
-                                disabled={deletingId === item.id}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-60 cursor-pointer"
-                                title="Delete"
-                              >
-                                {deletingId === item.id
-                                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                                  : <Trash2 className="h-4 w-4" />
-                                }
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

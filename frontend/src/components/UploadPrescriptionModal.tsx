@@ -100,8 +100,8 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      if (selectedFile.size > 100 * 1024) {
-        setError('File size must be less than 100 KB');
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError('File size must be less than 10 MB');
         return;
       }
       setFile(selectedFile);
@@ -287,7 +287,7 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
                       <p className="text-sm font-semibold text-slate-700">
                         {file ? file.name : 'Click to upload PDF or Image'}
                       </p>
-                      <p className="text-xs text-slate-400 mt-1">Max file size: 100 KB</p>
+                      <p className="text-xs text-slate-400 mt-1">Max file size: 10 MB</p>
                     </div>
                   </label>
                 </div>

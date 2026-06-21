@@ -36,6 +36,24 @@ public class RecordController {
         return ResponseEntity.ok(recordService.uploadPrescription(appointmentId, doctorId, patientId, notes, file));
     }
 
+    @PostMapping("/upload-external")
+    public ResponseEntity<MedicalRecord> uploadExternal(@RequestParam UUID patientId,
+                                                        @RequestParam(required = false) String notes,
+                                                        @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(recordService.uploadExternalPrescription(patientId, notes, file));
+    }
+
+    @GetMapping("/{id}/items")
+    public ResponseEntity<List<com.app.record.entity.PrescriptionItem>> getItems(@PathVariable UUID id) {
+        return ResponseEntity.ok(recordService.getPrescriptionItems(id));
+    }
+
+    @PutMapping("/{id}/verify-items")
+    public ResponseEntity<List<com.app.record.entity.PrescriptionItem>> verifyItems(@PathVariable UUID id,
+                                                                                    @RequestBody List<com.app.record.dto.PrescriptionMedicine> verifiedList) {
+        return ResponseEntity.ok(recordService.verifyMedicines(id, verifiedList));
+    }
+
     @PostMapping("/digital")
     public ResponseEntity<MedicalRecord> createDigital(@RequestBody com.app.record.dto.DigitalPrescriptionRequest request) {
         return ResponseEntity.ok(recordService.createDigitalPrescription(request));

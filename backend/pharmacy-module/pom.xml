@@ -19,5 +19,10 @@
 			<groupId>com.app</groupId>
 			<artifactId>user-module</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>record-module</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 	</dependencies>
 </project>

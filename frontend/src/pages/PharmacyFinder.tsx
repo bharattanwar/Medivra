@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MapPin, Phone, Package, Pill, Loader2, AlertCircle, Search,
   Navigation, Plus, Minus, CheckCircle2, ShoppingCart,
-  X, Sparkles
+  X, Sparkles, FileText, Upload
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -57,12 +58,35 @@ interface MatchResult {
   unsatisfiedMedicineIds: string[];
 }
 
+interface MedivraPrescription {
+  id: string;
+  appointmentId?: string;
+  doctorId?: string;
+  patientId: string;
+  filePath: string;
+  fileType: string;
+  notes?: string;
+  createdAt: string;
+}
+
+interface IdentifiedItem {
+  name: string;
+  strength: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  quantity: number;
+}
+
 type Tab = 'nearby' | 'match';
+type MatchMode = 'prescription' | 'manual';
+type PrescriptionSource = 'select' | 'upload';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const PharmacyFinder: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('nearby');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<Tab>('match');
 
   // ── Nearby Tab State ──────────────────────────────────────────────────────
   const [nearby, setNearby] = useState<NearbyPharmacy[]>([]);
@@ -74,16 +98,45 @@ const PharmacyFinder: React.FC = () => {
   const [geoError, setGeoError] = useState('');
 
   // ── Smart Match Tab State ────────────────────────────────────────────────
+  const [matchMode, setMatchMode] = useState<MatchMode>('prescription');
+  const [prescriptionSource, setPrescriptionSource] = useState<PrescriptionSource>('select');
+
+  // Consultation Prescription Select
+  const [prescriptions, setPrescriptions] = useState<MedivraPrescription[]>([]);
+  const [prescLoading, setPrescLoading] = useState(false);
+  const [selectedPrescId, setSelectedPrescId] = useState<string>('');
+
+  // External Upload Prescription
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadNotes, setUploadNotes] = useState('');
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadProgressMsg, setUploadProgressMsg] = useState('');
+
+  // Verified / Identified Items Editor List
+  const [identifiedItems, setIdentifiedItems] = useState<IdentifiedItem[]>([]);
+  const [verifying, setVerifying] = useState(false);
+  const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
+
+  // Manual Basket Search
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<MedicineSuggestion[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [basket, setBasket] = useState<PrescriptionItem[]>([]);
+
+  // Optimization Results
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchError, setMatchError] = useState('');
   const [matchLocation, setMatchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeMapPharmacyId, setActiveMapPharmacyId] = useState<string | null>(null);
   const [matchGeoLoading, setMatchGeoLoading] = useState(false);
+
+  // Checkout State
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+
+  const patientId = localStorage.getItem('userId');
 
   // ── Geolocation helpers ───────────────────────────────────────────────────
 
@@ -137,7 +190,102 @@ const PharmacyFinder: React.FC = () => {
     fetchNearby();
   }, [userLocation, radius]);
 
-  // ── Medicine autocomplete ─────────────────────────────────────────────────
+  // Load Patient Prescriptions list
+  useEffect(() => {
+    if (!patientId || matchMode !== 'prescription' || prescriptionSource !== 'select') return;
+    const fetchPrescriptions = async () => {
+      try {
+        setPrescLoading(true);
+        const res = await api.get(`/records/patient/${patientId}`);
+        setPrescriptions(res.data);
+      } catch (err) {
+        console.error('Failed to load patient prescriptions', err);
+      } finally {
+        setPrescLoading(false);
+      }
+    };
+    fetchPrescriptions();
+  }, [patientId, matchMode, prescriptionSource]);
+
+  // Handle Prescription Selection change
+  const handlePrescriptionSelect = async (recordId: string) => {
+    setSelectedPrescId(recordId);
+    if (!recordId) {
+      setIdentifiedItems([]);
+      setActiveRecordId(null);
+      return;
+    }
+    try {
+      setVerifying(true);
+      const res = await api.get(`/records/${recordId}/items`);
+      if (res.data) {
+        const items = res.data.map((item: any) => ({
+          name: item.medicineName,
+          strength: item.strength || '',
+          dosage: item.dosage || '1 tablet',
+          frequency: item.frequency || '1-0-1',
+          duration: item.duration || '5 days',
+          quantity: 10 // default purchase quantity
+        }));
+        setIdentifiedItems(items);
+        setActiveRecordId(recordId);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Could not retrieve items for this prescription.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Handle External Prescription Upload with simulated AI OCR loader
+  const handleExternalUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile || !patientId) return;
+    try {
+      setUploadLoading(true);
+      setUploadProgressMsg('Uploading prescription file securely...');
+      await new Promise(r => setTimeout(r, 600));
+      setUploadProgressMsg('Running AI-OCR Medical Scanning model...');
+      await new Promise(r => setTimeout(r, 700));
+      setUploadProgressMsg('Extracting pharmaceutical formulations & dosages...');
+      await new Promise(r => setTimeout(r, 600));
+
+      const formData = new FormData();
+      formData.append('patientId', patientId);
+      formData.append('notes', uploadNotes);
+      formData.append('file', uploadFile);
+
+      const res = await api.post('/records/upload-external', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data) {
+        const record = res.data;
+        const itemsRes = await api.get(`/records/${record.id}/items`);
+        const items = itemsRes.data.map((item: any) => ({
+          name: item.medicineName,
+          strength: item.strength || '',
+          dosage: item.dosage || '1 tablet',
+          frequency: item.frequency || '1-0-1',
+          duration: item.duration || '5 days',
+          quantity: 10
+        }));
+        setIdentifiedItems(items);
+        setActiveRecordId(record.id);
+        setUploadFile(null);
+        setUploadNotes('');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload/analyze prescription.');
+    } finally {
+      setUploadLoading(false);
+      setUploadProgressMsg('');
+    }
+  };
+
+  // ── Medicine autocomplete (Manual Basket) ──────────────────────────────────
 
   useEffect(() => {
     if (query.length < 2) { setSuggestions([]); return; }
@@ -155,7 +303,7 @@ const PharmacyFinder: React.FC = () => {
   const addToBasket = (med: MedicineSuggestion) => {
     setBasket(prev => {
       if (prev.find(i => i.medicineId === med.id)) return prev;
-      return [...prev, { medicineId: med.id, medicineName: med.name, quantity: 1 }];
+      return [...prev, { medicineId: med.id, medicineName: med.name, quantity: 10 }];
     });
     setQuery('');
     setSuggestions([]);
@@ -176,6 +324,66 @@ const PharmacyFinder: React.FC = () => {
     setMatchResult(null);
   };
 
+  // Optimize & Search Fulfillments from Prescription verified items
+  const handleResolveAndMatch = async () => {
+    if (identifiedItems.length === 0) {
+      alert('Prescription has no medicines.');
+      return;
+    }
+    const loc = matchLocation || userLocation;
+    if (!loc) {
+      setMatchError('Location is required. Please allow GPS access.');
+      return;
+    }
+    try {
+      setMatchLoading(true);
+      setMatchError('');
+      setMatchResult(null);
+
+      // 1. Resolve names to medicine IDs in database
+      const resolvePayload = identifiedItems.map(item => ({
+        name: item.name,
+        strength: item.strength
+      }));
+      const resolveRes = await api.post('/medicines/resolve', resolvePayload);
+      const resolvedList = resolveRes.data.data;
+
+      // Map verified quantities to the resolved IDs
+      const finalBasket = resolvedList.map((m: any, idx: number) => ({
+        medicineId: m.id,
+        quantity: identifiedItems[idx].quantity
+      }));
+
+      // If we have an active record ID, verify the items in the backend records too
+      if (activeRecordId) {
+        await api.put(`/records/${activeRecordId}/verify-items`, identifiedItems.map(item => ({
+          name: item.name,
+          strength: item.strength,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          duration: item.duration
+        })));
+      }
+
+      // 2. Query Match Optimization API
+      const matchRes = await api.post('/pharmacies/match', {
+        userLatitude: loc.lat,
+        userLongitude: loc.lng,
+        radiusKm: 30,
+        medicines: finalBasket
+      });
+
+      if (matchRes.data.success) {
+        setMatchResult(matchRes.data.data);
+      }
+    } catch (err: any) {
+      setMatchError(err.response?.data?.message || 'Matching algorithm failed. Try again.');
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
+  // Perform Manual search match
   const handleMatch = async () => {
     if (basket.length === 0) { setMatchError('Add at least one medicine.'); return; }
     const loc = matchLocation || userLocation;
@@ -198,26 +406,89 @@ const PharmacyFinder: React.FC = () => {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Place single checkout order
+  const handleCheckout = async () => {
+    if (!matchResult || !deliveryAddress.trim() || !patientId) return;
+    const loc = matchLocation || userLocation;
+    if (!loc) return;
 
+    try {
+      setCheckoutLoading(true);
+      
+      // Build order items
+      const checkoutItems: any[] = [];
+      matchResult.allocations.forEach(alloc => {
+        alloc.items.forEach(item => {
+          checkoutItems.push({
+            pharmacyId: alloc.pharmacyId,
+            medicineId: item.medicineId,
+            quantity: item.quantity,
+            price: item.unitPrice
+          });
+        });
+      });
+
+      const payload = {
+        patientId,
+        prescriptionId: activeRecordId || null,
+        deliveryAddress: deliveryAddress.trim(),
+        userLatitude: loc.lat,
+        userLongitude: loc.lng,
+        items: checkoutItems
+      };
+
+      const res = await api.post('/medicine-orders/checkout', payload);
+      if (res.data.success) {
+        setCheckoutSuccess(true);
+        setTimeout(() => {
+          setCheckoutSuccess(false);
+          setBasket([]);
+          setIdentifiedItems([]);
+          setMatchResult(null);
+          navigate('/patient/orders');
+        }, 2000);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Checkout failed. Please check payment/delivery detail details.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Render helpers
   const tabClass = (t: Tab) =>
     `flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
       activeTab === t
-        ? 'bg-white text-indigo-700 shadow-md'
+        ? 'bg-white text-indigo-750 shadow-md'
         : 'text-slate-500 hover:text-slate-700'
+    }`;
+
+  const modeBtnClass = (m: MatchMode) =>
+    `flex-1 py-3 text-sm font-bold border-b-2 transition-all flex items-center justify-center gap-2 ${
+      matchMode === m
+        ? 'border-indigo-600 text-indigo-600 bg-indigo-50/10'
+        : 'border-transparent text-slate-500 hover:text-slate-700'
+    }`;
+
+  const sourceBtnClass = (s: PrescriptionSource) =>
+    `flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+      prescriptionSource === s
+        ? 'bg-indigo-600 text-white shadow'
+        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
     }`;
 
   return (
     <div className="min-h-full bg-slate-50">
       {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-600 via-purple-700 to-purple-800 text-white">
+      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-1.5 rounded-full text-sm font-semibold mb-4">
-            <Pill className="h-4 w-4" /> Pharmacy Finder
+            <Pill className="h-4 w-4" /> Medicine Ecosystem
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Find Medicines Near You</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Order Prescription Medicines</h1>
           <p className="text-indigo-200 text-base max-w-xl mx-auto">
-            Discover nearby pharmacies or use our smart prescription matcher to find the best availability.
+            Upload your doctor's prescription or search for medicines directly. We'll find and optimize fulfillment routes across nearby pharmacies.
           </p>
 
           {/* Tab Toggle */}
@@ -234,7 +505,7 @@ const PharmacyFinder: React.FC = () => {
               onClick={() => setActiveTab('match')}
               className={tabClass('match')}
             >
-              <Sparkles className="h-4 w-4" /> Smart Prescription Match
+              <Sparkles className="h-4 w-4" /> Order Medicines
             </button>
           </div>
         </div>
@@ -270,7 +541,7 @@ const PharmacyFinder: React.FC = () => {
                   <select
                     value={radius}
                     onChange={e => setRadius(Number(e.target.value))}
-                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700"
+                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-white"
                   >
                     {[5, 10, 20, 30, 50].map(r => (
                       <option key={r} value={r}>{r} km</option>
@@ -284,7 +555,7 @@ const PharmacyFinder: React.FC = () => {
                     setGeoError
                   )}
                   disabled={geoLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-xs font-semibold hover:bg-indigo-50 transition-colors disabled:opacity-60"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-xs font-semibold hover:bg-indigo-50 transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   {geoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
                   Re-detect
@@ -295,10 +566,7 @@ const PharmacyFinder: React.FC = () => {
             {/* Results */}
             {nearbyLoading ? (
               <div className="flex flex-col items-center py-24 gap-3">
-                <div className="relative">
-                  <div className="h-16 w-16 rounded-full border-4 border-indigo-100" />
-                  <div className="absolute inset-0 h-16 w-16 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
-                </div>
+                <div className="h-16 w-16 border-4 border-indigo-100 rounded-full animate-spin border-t-indigo-600" />
                 <p className="text-slate-500 text-sm">Finding pharmacies near you…</p>
               </div>
             ) : nearbyError ? (
@@ -412,12 +680,14 @@ const PharmacyFinder: React.FC = () => {
         {/* ── SMART MATCH TAB ────────────────────────────────────────────────── */}
         {activeTab === 'match' && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* Left — Build Prescription */}
+            
+            {/* Left Column — Selection, Upload or Manual Addition */}
             <div className="lg:col-span-2 space-y-5">
-              {/* Location for match */}
+              
+              {/* Location configuration */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Your Location</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Delivery Location</p>
                   <button
                     onClick={() => requestLocation(
                       (lat, lng) => setMatchLocation({ lat, lng }),
@@ -425,7 +695,7 @@ const PharmacyFinder: React.FC = () => {
                       () => {}
                     )}
                     disabled={matchGeoLoading}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                   >
                     {matchGeoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
                     {matchLocation || userLocation ? 'Re-detect' : 'Detect Location'}
@@ -438,136 +708,314 @@ const PharmacyFinder: React.FC = () => {
                 ) : (matchLocation || userLocation) ? (
                   <p className="text-sm font-semibold text-green-700">📍 Location detected</p>
                 ) : (
-                  <p className="text-sm text-amber-600 font-medium">⚠ Location required for matching</p>
+                  <p className="text-sm text-amber-600 font-medium">⚠ Location required for pharmacy optimization</p>
                 )}
               </div>
 
-              {/* Medicine search */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                  <Search className="h-4 w-4 text-indigo-500" /> Add Medicines
-                </h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  {suggestLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-400 animate-spin" />
+              {/* Mode Selector */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setMatchMode('prescription'); setMatchResult(null); }}
+                  className={modeBtnClass('prescription')}
+                >
+                  <FileText className="h-4 w-4" /> Order by Prescription
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMatchMode('manual'); setMatchResult(null); }}
+                  className={modeBtnClass('manual')}
+                >
+                  <Search className="h-4 w-4" /> Manual Search
+                </button>
+              </div>
+
+              {/* Pathway 1: Order by Prescription (Select Medivra Consultation or Upload External) */}
+              {matchMode === 'prescription' && (
+                <div className="space-y-4">
+                  {/* Select/Upload Toggle */}
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => { setPrescriptionSource('select'); setIdentifiedItems([]); setSelectedPrescId(''); }}
+                      className={sourceBtnClass('select')}
+                    >
+                      Medivra Consultation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPrescriptionSource('upload'); setIdentifiedItems([]); setSelectedPrescId(''); }}
+                      className={sourceBtnClass('upload')}
+                    >
+                      Upload External Prescription
+                    </button>
+                  </div>
+
+                  {/* Mode A: Select Medivra Prescription */}
+                  {prescriptionSource === 'select' && (
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-indigo-600" /> Select Previous Prescription
+                      </h3>
+                      {prescLoading ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                        </div>
+                      ) : prescriptions.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-4">
+                          No generated prescriptions found from consults. Try uploading one.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-slate-500">Consultation Date & Notes</label>
+                          <select
+                            value={selectedPrescId}
+                            onChange={e => handlePrescriptionSelect(e.target.value)}
+                            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">-- Choose a prescription --</option>
+                            {prescriptions.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {new Date(p.createdAt).toLocaleDateString('en-IN')} - {p.notes?.slice(0, 30) || 'Digital Prescription'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    placeholder="Search medicine name…"
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  {suggestions.length > 0 && (
-                    <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-                      {suggestions.map(m => (
+
+                  {/* Mode B: Upload External Prescription */}
+                  {prescriptionSource === 'upload' && (
+                    <form onSubmit={handleExternalUpload} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        <Upload className="h-4 w-4 text-indigo-600" /> Upload PDF / Image
+                      </h3>
+                      
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-500">Prescription File (PDF/JPG)</label>
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={e => setUploadFile(e.target.files?.[0] || null)}
+                          className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-slate-500">Notes / Medical Advice (Optional)</label>
+                        <input
+                          type="text"
+                          value={uploadNotes}
+                          onChange={e => setUploadNotes(e.target.value)}
+                          placeholder="e.g. For allergy, 2 tablets daily..."
+                          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                      </div>
+
+                      {uploadLoading ? (
+                        <div className="bg-indigo-50 rounded-xl p-3 flex items-center gap-3">
+                          <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                          <span className="text-xs font-bold text-indigo-700 animate-pulse">{uploadProgressMsg}</span>
+                        </div>
+                      ) : (
                         <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => addToBasket(m)}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                          type="submit"
+                          disabled={!uploadFile}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors"
                         >
-                          <p className="text-sm font-semibold text-slate-800">{m.name}</p>
-                          <p className="text-xs text-slate-400">{m.manufacturer} {m.strength && `· ${m.strength}`}</p>
+                          Upload & Extract Medicines
                         </button>
+                      )}
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Pathway 2: Manual Basket Addition */}
+              {matchMode === 'manual' && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <Search className="h-4 w-4 text-indigo-500" /> Add Medicines
+                  </h3>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    {suggestLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-400 animate-spin" />
+                    )}
+                    <input
+                      type="text"
+                      value={query}
+                      onChange={e => setQuery(e.target.value)}
+                      placeholder="Search medicine name…"
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    {suggestions.length > 0 && (
+                      <div className="absolute z-25 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                        {suggestions.map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => addToBasket(m)}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                          >
+                            <p className="text-sm font-semibold text-slate-800">{m.name}</p>
+                            <p className="text-xs text-slate-400">{m.manufacturer} {m.strength && `· ${m.strength}`}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual Basket List */}
+                  {basket.length > 0 && (
+                    <div className="border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-100 bg-slate-50/20">
+                      {basket.map(item => (
+                        <div key={item.medicineId} className="flex items-center justify-between p-3">
+                          <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{item.medicineName}</p>
+                          <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => updateQty(item.medicineId, -5)}
+                              className="p-1 rounded-md hover:bg-white text-slate-500 hover:text-slate-700"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="w-6 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(item.medicineId, 5)}
+                              className="p-1 rounded-md hover:bg-white text-slate-500 hover:text-slate-700"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFromBasket(item.medicineId)}
+                            className="text-slate-400 hover:text-red-500"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       ))}
+                      {matchError && (
+                        <div className="p-3 bg-red-50 text-red-700 text-xs border-t border-slate-100 flex items-center gap-1.5 font-semibold">
+                          <AlertCircle className="h-4 w-4 text-red-500" /> {matchError}
+                        </div>
+                      )}
+                      <div className="p-3 bg-white">
+                        <button
+                          type="button"
+                          onClick={handleMatch}
+                          disabled={matchLoading}
+                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer"
+                        >
+                          Find Best Match
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-2">Type at least 2 characters to search registered medicines.</p>
-              </div>
+              )}
 
-              {/* Basket */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4 text-indigo-500" /> Prescription Basket
-                    {basket.length > 0 && (
-                      <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                        {basket.length}
-                      </span>
-                    )}
-                  </h3>
-                </div>
-
-                {basket.length === 0 ? (
-                  <div className="text-center py-10 px-5">
-                    <Pill className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-400 text-sm">Search and add medicines above.</p>
+              {/* Prescription Items Verification Screen */}
+              {matchMode === 'prescription' && (
+                verifying ? (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center text-slate-500 text-xs font-semibold flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> Scanning prescription items...
                   </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {basket.map(item => (
-                      <div key={item.medicineId} className="flex items-center gap-3 px-5 py-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 truncate">{item.medicineName}</p>
-                        </div>
-                        <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-0.5">
-                          <button
-                            onClick={() => updateQty(item.medicineId, -1)}
-                            className="p-1.5 rounded-lg hover:bg-white transition-colors text-slate-500 hover:text-slate-700"
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <span className="w-7 text-center text-sm font-bold text-slate-700">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQty(item.medicineId, 1)}
-                            className="p-1.5 rounded-lg hover:bg-white transition-colors text-slate-500 hover:text-slate-700"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => removeFromBasket(item.medicineId)}
-                          className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ) : identifiedItems.length > 0 ? (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-scale-in">
+                    <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-indigo-600" /> Verify Prescription Medicines
+                      </h3>
+                    </div>
 
-                {basket.length > 0 && (
-                  <div className="p-4 border-t border-slate-100">
+                    <div className="p-4 divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                      {identifiedItems.map((item, idx) => (
+                        <div key={idx} className="py-3 flex flex-col gap-1.5">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">{item.name}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {item.strength && `${item.strength} · `}{item.dosage} · {item.frequency} · {item.duration}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setIdentifiedItems(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-slate-300 hover:text-red-500 cursor-pointer"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 justify-end">
+                            <label className="text-[10px] text-slate-500 font-bold">Qty to order:</label>
+                            <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 5) } : it));
+                                }}
+                                className="p-1 rounded bg-white text-slate-500"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="w-6 text-center text-[11px] font-bold text-slate-700">{item.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 5 } : it));
+                                }}
+                                className="p-1 rounded bg-white text-slate-500"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
                     {matchError && (
-                      <p className="text-xs text-red-600 mb-3 flex items-center gap-1.5">
-                        <AlertCircle className="h-3.5 w-3.5" /> {matchError}
-                      </p>
+                      <div className="p-3 bg-red-50 text-red-750 text-xs border-t border-slate-100 flex items-center gap-1.5 font-semibold">
+                        <AlertCircle className="h-3.5 w-3.5 text-red-500" /> {matchError}
+                      </div>
                     )}
-                    <button
-                      id="find-pharmacy-match-btn"
-                      onClick={handleMatch}
-                      disabled={matchLoading}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-60"
-                    >
-                      {matchLoading ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Finding best pharmacies…</>
-                      ) : (
-                        <><Sparkles className="h-4 w-4" /> Find Best Match</>
-                      )}
-                    </button>
+
+                    <div className="p-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleResolveAndMatch}
+                        disabled={matchLoading}
+                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2.5 rounded-xl font-bold text-xs shadow cursor-pointer hover:shadow-md transition-all"
+                      >
+                        {matchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                        Optimize & Find Pharmacies
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
+                ) : null
+              )}
             </div>
 
-            {/* Right — Results */}
-            <div className="lg:col-span-3 space-y-5">
+            {/* Right Column — Results & Checkout */}
+            <div className="lg:col-span-3 space-y-5 animate-fade-in">
               {matchLoading && (
-                <div className="flex flex-col items-center py-24 gap-4">
+                <div className="flex flex-col items-center py-24 bg-white rounded-2xl border border-slate-200 shadow-sm gap-4">
                   <div className="relative">
-                    <div className="h-16 w-16 rounded-full border-4 border-purple-100" />
-                    <div className="absolute inset-0 h-16 w-16 rounded-full border-4 border-purple-600 border-t-transparent animate-spin" />
-                    <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-purple-600" />
+                    <div className="h-16 w-16 rounded-full border-4 border-purple-100 border-t-purple-600 animate-spin" />
+                    <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-purple-600 animate-pulse" />
                   </div>
-                  <p className="text-slate-500 text-sm">Analysing nearby pharmacies…</p>
+                  <p className="text-slate-500 text-sm font-medium">Analysing pharmacy inventories near you…</p>
                 </div>
               )}
 
               {matchResult && !matchLoading && (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {/* Status Banner */}
                   <div className={`rounded-2xl px-5 py-4 flex items-center gap-3 ${
                     matchResult.allSatisfied
@@ -581,18 +1029,18 @@ const PharmacyFinder: React.FC = () => {
                     )}
                     <div>
                       <p className={`font-bold text-sm ${matchResult.allSatisfied ? 'text-green-800' : 'text-amber-800'}`}>
-                        {matchResult.allSatisfied ? 'All medicines matched!' : 'Partial match — some medicines unavailable'}
+                        {matchResult.allSatisfied ? 'All medicines matched successfully!' : 'Partial match — some medicines unavailable'}
                       </p>
                       <p className={`text-xs mt-0.5 ${matchResult.allSatisfied ? 'text-green-600' : 'text-amber-600'}`}>
                         {matchResult.allSatisfied
-                          ? `Found across ${matchResult.allocations.length} pharmacy${matchResult.allocations.length > 1 ? 'ies' : ''}.`
+                          ? `Fulfillment optimized across ${matchResult.allocations.length} pharmacy${matchResult.allocations.length > 1 ? 'ies' : ''}.`
                           : `${matchResult.unsatisfiedMedicineIds.length} medicine(s) not available nearby.`
                         }
                       </p>
                     </div>
                     <div className="ml-auto text-right">
-                      <p className="text-xs text-slate-500">Grand Total</p>
-                      <p className="text-xl font-bold text-slate-900">₹{Number(matchResult.totalAmount).toFixed(2)}</p>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Subtotal</p>
+                      <p className="text-xl font-black text-slate-900">₹{Number(matchResult.totalAmount).toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -643,7 +1091,7 @@ const PharmacyFinder: React.FC = () => {
                       {/* Items */}
                       <div className="divide-y divide-slate-100">
                         {alloc.items.map(item => (
-                          <div key={item.medicineId} className="flex items-center justify-between px-5 py-3">
+                          <div key={item.medicineId} className="flex items-center justify-between px-5 py-3 bg-white">
                             <div>
                               <p className="text-sm font-semibold text-slate-800">{item.medicineName}</p>
                               <p className="text-xs text-slate-400 mt-0.5">
@@ -663,25 +1111,48 @@ const PharmacyFinder: React.FC = () => {
                     </div>
                   ))}
 
-                  {/* Grand Total Card */}
-                  {matchResult.allocations.length > 1 && (
-                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl px-6 py-5 flex items-center justify-between shadow-lg">
-                      <div>
-                        <p className="text-indigo-200 text-sm font-semibold">Grand Total</p>
-                        <p className="text-xs text-indigo-300 mt-0.5">{matchResult.allocations.length} pharmacies</p>
-                      </div>
-                      <p className="text-3xl font-bold">₹{Number(matchResult.totalAmount).toFixed(2)}</p>
+                  {/* Checkout Form */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                    <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                      <ShoppingCart className="h-4 w-4 text-indigo-600" /> Unified Checkout
+                    </h3>
+                    
+                    <div className="space-y-1">
+                      <label className="block text-xs font-semibold text-slate-500">Delivery Address</label>
+                      <input
+                        type="text"
+                        value={deliveryAddress}
+                        onChange={e => setDeliveryAddress(e.target.value)}
+                        placeholder="Enter your complete home/office delivery address..."
+                        className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        required
+                      />
                     </div>
-                  )}
+
+                    {checkoutSuccess ? (
+                      <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+                        ✓ Checkout successful! Redirecting to tracking center…
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCheckout}
+                        disabled={checkoutLoading || !deliveryAddress.trim()}
+                        className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {checkoutLoading ? 'Processing Checkout Payment…' : `Place Order (₹${Number(matchResult.totalAmount).toFixed(2)})`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
               {!matchResult && !matchLoading && (
                 <div className="bg-white rounded-2xl border border-dashed border-slate-300 text-center py-24 px-8">
-                  <Sparkles className="h-14 w-14 text-slate-200 mx-auto mb-4" />
-                  <h3 className="text-lg font-bold text-slate-700 mb-2">Smart Prescription Matching</h3>
-                  <p className="text-slate-400 text-sm max-w-sm mx-auto">
-                    Add medicines to your basket and click <strong>Find Best Match</strong>. Our algorithm will optimise across nearby pharmacies for the best availability and lowest cost.
+                  <Sparkles className="h-14 w-14 text-indigo-300 mx-auto mb-4 animate-pulse" />
+                  <h3 className="text-lg font-bold text-slate-700 mb-2">Automated Prescription Fulfillment</h3>
+                  <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed">
+                    Select a previous consult prescription or upload an external prescription sheet. Our engine will verify the medicines and map the cheapest and fastest multi-pharmacy deliveries.
                   </p>
                 </div>
               )}

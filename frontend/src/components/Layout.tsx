@@ -97,6 +97,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       <Link to="/patient/pharmacy" className={navLinkClass('/patient/pharmacy')}>
                         Pharmacy
                       </Link>
+                      <Link to="/patient/orders" className={navLinkClass('/patient/orders')}>
+                        Medicine Orders
+                      </Link>
                       <Link to="/patient/appointments" className={navLinkClass('/patient/appointments')}>
                         Appointments
                       </Link>

@@ -17,6 +17,7 @@ import AdminAppointments from './pages/AdminAppointments';
 import PharmacyRegistration from './pages/PharmacyRegistration';
 import PharmacyDashboard from './pages/PharmacyDashboard';
 import PharmacyFinder from './pages/PharmacyFinder';
+import OrderTracking from './pages/OrderTracking';
 
 import { WebSocketProvider } from './context/WebSocketContext';
 
@@ -48,6 +49,7 @@ function App() {
             <Route path="/pharmacy/register" element={<PharmacyRegistration />} />
             <Route path="/pharmacy/dashboard" element={<PharmacyDashboard />} />
             <Route path="/patient/pharmacy" element={<PharmacyFinder />} />
+            <Route path="/patient/orders" element={<OrderTracking />} />
           </Routes>
         </Layout>
       </Router>

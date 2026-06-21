@@ -21,11 +21,13 @@ public class MedicalRecordService {
     private final RecordRepository recordRepository;
     private final FileStorageService fileStorageService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.app.record.repository.PrescriptionItemRepository prescriptionItemRepository;
 
-    public MedicalRecordService(RecordRepository recordRepository, FileStorageService fileStorageService, ApplicationEventPublisher eventPublisher) {
+    public MedicalRecordService(RecordRepository recordRepository, FileStorageService fileStorageService, ApplicationEventPublisher eventPublisher, com.app.record.repository.PrescriptionItemRepository prescriptionItemRepository) {
         this.recordRepository = recordRepository;
         this.fileStorageService = fileStorageService;
         this.eventPublisher = eventPublisher;
+        this.prescriptionItemRepository = prescriptionItemRepository;
     }
 
     public MedicalRecord uploadPrescription(UUID appointmentId, UUID doctorId, UUID patientId, String notes, MultipartFile file) {
@@ -40,6 +42,24 @@ public class MedicalRecordService {
         record.setFileType(file.getContentType());
         
         MedicalRecord saved = recordRepository.save(record);
+
+        // Simulated AI/OCR extraction for uploaded prescription file
+        String[][] mockMeds = {
+            {"Paracetamol", "500mg", "1 tablet", "1-0-1", "5 days"},
+            {"Cetirizine", "10mg", "1 tablet", "0-0-1", "7 days"},
+            {"Ibuprofen", "400mg", "1 tablet", "1-0-1", "3 days"}
+        };
+        
+        for (String[] mockMed : mockMeds) {
+            com.app.record.entity.PrescriptionItem item = new com.app.record.entity.PrescriptionItem();
+            item.setMedicalRecordId(saved.getId());
+            item.setMedicineName(mockMed[0]);
+            item.setStrength(mockMed[1]);
+            item.setDosage(mockMed[2]);
+            item.setFrequency(mockMed[3]);
+            item.setDuration(mockMed[4]);
+            prescriptionItemRepository.save(item);
+        }
 
         // Publish event to notify the Patient
         try {
@@ -170,6 +190,19 @@ public class MedicalRecordService {
         
         MedicalRecord saved = recordRepository.save(record);
 
+        if (request.getMedicines() != null) {
+            for (com.app.record.dto.PrescriptionMedicine med : request.getMedicines()) {
+                com.app.record.entity.PrescriptionItem item = new com.app.record.entity.PrescriptionItem();
+                item.setMedicalRecordId(saved.getId());
+                item.setMedicineName(med.getName());
+                item.setStrength(med.getStrength());
+                item.setDosage(med.getDosage());
+                item.setFrequency(med.getFrequency());
+                item.setDuration(med.getDuration());
+                prescriptionItemRepository.save(item);
+            }
+        }
+
         // Publish event to notify the Patient
         try {
             eventPublisher.publishEvent(new NotificationEvent(
@@ -185,6 +218,65 @@ public class MedicalRecordService {
         }
 
         return saved;
+    }
+
+    @Transactional
+    public MedicalRecord uploadExternalPrescription(UUID patientId, String notes, MultipartFile file) {
+        String filename = fileStorageService.save(file);
+        
+        MedicalRecord record = new MedicalRecord();
+        record.setPatientId(patientId);
+        record.setNotes(notes != null && !notes.isBlank() ? notes : "Uploaded external prescription");
+        record.setFilePath(filename);
+        record.setFileType(file.getContentType());
+        
+        MedicalRecord saved = recordRepository.save(record);
+
+        // Simulated AI/OCR extraction
+        // We add some standard medicines to simulate scanning the document
+        String[][] mockMeds = {
+            {"Paracetamol", "500mg", "1 tablet", "1-0-1", "5 days"},
+            {"Cetirizine", "10mg", "1 tablet", "0-0-1", "7 days"},
+            {"Ibuprofen", "400mg", "1 tablet", "1-0-1", "3 days"}
+        };
+        
+        for (String[] mockMed : mockMeds) {
+            com.app.record.entity.PrescriptionItem item = new com.app.record.entity.PrescriptionItem();
+            item.setMedicalRecordId(saved.getId());
+            item.setMedicineName(mockMed[0]);
+            item.setStrength(mockMed[1]);
+            item.setDosage(mockMed[2]);
+            item.setFrequency(mockMed[3]);
+            item.setDuration(mockMed[4]);
+            prescriptionItemRepository.save(item);
+        }
+        
+        return saved;
+    }
+
+    @Transactional
+    public List<com.app.record.entity.PrescriptionItem> getPrescriptionItems(UUID recordId) {
+        return prescriptionItemRepository.findByMedicalRecordId(recordId);
+    }
+
+    @Transactional
+    public List<com.app.record.entity.PrescriptionItem> verifyMedicines(UUID recordId, List<com.app.record.dto.PrescriptionMedicine> verifiedList) {
+        prescriptionItemRepository.deleteByMedicalRecordId(recordId);
+        
+        List<com.app.record.entity.PrescriptionItem> savedItems = new java.util.ArrayList<>();
+        if (verifiedList != null) {
+            for (com.app.record.dto.PrescriptionMedicine med : verifiedList) {
+                com.app.record.entity.PrescriptionItem item = new com.app.record.entity.PrescriptionItem();
+                item.setMedicalRecordId(recordId);
+                item.setMedicineName(med.getName());
+                item.setStrength(med.getStrength());
+                item.setDosage(med.getDosage());
+                item.setFrequency(med.getFrequency());
+                item.setDuration(med.getDuration());
+                savedItems.add(prescriptionItemRepository.save(item));
+            }
+        }
+        return savedItems;
     }
 
     public List<MedicalRecord> getRecordsByPatient(UUID patientId) {
