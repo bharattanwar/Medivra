@@ -7,4 +7,5 @@ if [ -f .env.local ]; then
 else
   echo "No .env.local found — running in mock payment mode"
 fi
+mvn install -DskipTests
 mvn spring-boot:run -pl application

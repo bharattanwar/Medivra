@@ -4,6 +4,7 @@ import com.app.common.dto.ApiResponse;
 import com.app.pharmacy.dto.CheckoutRequest;
 import com.app.pharmacy.dto.MedicineOrderResponse;
 import com.app.pharmacy.dto.MedicineOrderResponse.MedicineOrderItemDetail;
+import com.app.pharmacy.dto.VerifyOrderPaymentRequest;
 import com.app.pharmacy.entity.RefillReminder;
 import com.app.pharmacy.service.MedicineOrderService;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,18 @@ public class MedicineOrderController {
     public ResponseEntity<ApiResponse<MedicineOrderResponse>> checkout(@RequestBody CheckoutRequest request) {
         MedicineOrderResponse response = orderService.checkout(request);
         return ResponseEntity.ok(ApiResponse.success(response, "Order placed successfully"));
+    }
+
+    @PostMapping("/verify-payment")
+    public ResponseEntity<ApiResponse<MedicineOrderResponse>> verifyPayment(@RequestBody VerifyOrderPaymentRequest request) {
+        MedicineOrderResponse response = orderService.verifyPayment(request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Payment verified successfully"));
+    }
+
+    @PutMapping("/{orderId}/confirm-payment")
+    public ResponseEntity<ApiResponse<MedicineOrderResponse>> confirmPayment(@PathVariable UUID orderId) {
+        MedicineOrderResponse response = orderService.confirmPayment(orderId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Payment confirmed successfully"));
     }
 
     @GetMapping("/patient/{patientId}")

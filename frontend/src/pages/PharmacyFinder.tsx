@@ -6,6 +6,7 @@ import {
   X, Sparkles, FileText, Upload, CreditCard, Truck, Smartphone
 } from 'lucide-react';
 import api from '../services/api';
+import { openRazorpayCheckout } from '../services/razorpay';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -435,7 +436,7 @@ const PharmacyFinder: React.FC = () => {
     };
   };
 
-  // Place order in backend
+  // Place order in backend (specifically for COD or general success handling)
   const placeOrderInBackend = async (method: 'online' | 'cod') => {
     const payload = buildOrderPayload();
     if (!payload) return;
@@ -444,16 +445,7 @@ const PharmacyFinder: React.FC = () => {
     try {
       const res = await api.post('/medicine-orders/checkout', { ...payload, paymentMethod: method });
       if (res.data.success) {
-        setCheckoutSuccess(true);
-        setTimeout(() => {
-          setCheckoutSuccess(false);
-          setBasket([]);
-          setIdentifiedItems([]);
-          setMatchResult(null);
-          setPaymentStep('address');
-          setPaymentMethod(null);
-          navigate('/patient/orders');
-        }, 2000);
+        onPaymentSuccess();
       }
     } catch (err) {
       console.error(err);
@@ -462,6 +454,19 @@ const PharmacyFinder: React.FC = () => {
     } finally {
       setCheckoutLoading(false);
     }
+  };
+
+  const onPaymentSuccess = () => {
+    setCheckoutSuccess(true);
+    setTimeout(() => {
+      setCheckoutSuccess(false);
+      setBasket([]);
+      setIdentifiedItems([]);
+      setMatchResult(null);
+      setPaymentStep('address');
+      setPaymentMethod(null);
+      navigate('/patient/orders');
+    }, 2000);
   };
 
   // Handle payment method confirmation
@@ -474,14 +479,65 @@ const PharmacyFinder: React.FC = () => {
       return;
     }
 
-    // Simulate online payment gateway (Razorpay / UPI mock)
+    // Online payment using Razorpay
+    const payload = buildOrderPayload();
+    if (!payload) return;
+    setCheckoutLoading(true);
+    setPaymentError('');
     try {
-      setCheckoutLoading(true);
-      // Simulate a 1.5s payment gateway processing animation
-      await new Promise(r => setTimeout(r, 1500));
-      await placeOrderInBackend('online');
-    } catch {
-      setPaymentError('Payment gateway error. Try again.');
+      // Step 1: Create order in backend (PENDING status)
+      const res = await api.post('/medicine-orders/checkout', { ...payload, paymentMethod: 'online' });
+      if (res.data.success) {
+        const orderData = res.data.data;
+
+        // Step 2: Handle mock vs live payment
+        if (orderData.mockMode) {
+          // Immediately verify payment for mock mode
+          await api.post('/medicine-orders/verify-payment', {
+            orderId: orderData.id,
+            razorpayOrderId: orderData.razorpayOrderId,
+            razorpayPaymentId: `pay_mock_${Date.now()}`,
+            method: 'mock'
+          });
+          onPaymentSuccess();
+        } else {
+          // Open real Razorpay checkout
+          await openRazorpayCheckout({
+            key: orderData.razorpayKeyId,
+            amount: orderData.amountPaise,
+            currency: orderData.currency,
+            name: 'Medivra Pharmacy',
+            description: `Medicine Order Payment (₹${orderData.totalAmount})`,
+            order_id: orderData.razorpayOrderId,
+            theme: { color: '#f97316' },
+            handler: async (response) => {
+              try {
+                setPaymentStep('processing');
+                await api.post('/medicine-orders/verify-payment', {
+                  orderId: orderData.id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                  method: 'razorpay'
+                });
+                onPaymentSuccess();
+              } catch {
+                setPaymentError('Payment verification failed. Please contact support.');
+                setPaymentStep('method');
+              }
+            },
+            modal: {
+              ondismiss: () => {
+                setPaymentError('Payment cancelled. Please try again.');
+                setPaymentStep('method');
+              }
+            }
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPaymentError(err.response?.data?.message || 'Payment gateway error. Try again.');
       setPaymentStep('method');
       setCheckoutLoading(false);
     }

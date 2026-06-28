@@ -1,8 +1,11 @@
 package com.app.pharmacy.service;
 
+import com.app.payment.service.RazorpayService;
+import com.app.payment.config.RazorpayProperties;
 import com.app.pharmacy.dto.CheckoutRequest;
 import com.app.pharmacy.dto.MedicineOrderResponse;
 import com.app.pharmacy.dto.MedicineOrderResponse.MedicineOrderItemDetail;
+import com.app.pharmacy.dto.VerifyOrderPaymentRequest;
 import com.app.pharmacy.entity.Medicine;
 import com.app.pharmacy.entity.MedicineOrder;
 import com.app.pharmacy.entity.MedicineOrderItem;
@@ -17,6 +20,7 @@ import com.app.pharmacy.repository.PharmacyRepository;
 import com.app.pharmacy.repository.RefillReminderRepository;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
+import com.razorpay.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +43,8 @@ public class MedicineOrderService {
     private final MedicineRepository medicineRepository;
     private final PharmacyInventoryRepository inventoryRepository;
     private final UserRepository userRepository;
+    private final RazorpayService razorpayService;
+    private final RazorpayProperties razorpayProperties;
 
     public MedicineOrderService(MedicineOrderRepository orderRepository,
                                MedicineOrderItemRepository orderItemRepository,
@@ -46,7 +52,9 @@ public class MedicineOrderService {
                                PharmacyRepository pharmacyRepository,
                                MedicineRepository medicineRepository,
                                PharmacyInventoryRepository inventoryRepository,
-                               UserRepository userRepository) {
+                               UserRepository userRepository,
+                               RazorpayService razorpayService,
+                               RazorpayProperties razorpayProperties) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.refillReminderRepository = refillReminderRepository;
@@ -54,6 +62,8 @@ public class MedicineOrderService {
         this.medicineRepository = medicineRepository;
         this.inventoryRepository = inventoryRepository;
         this.userRepository = userRepository;
+        this.razorpayService = razorpayService;
+        this.razorpayProperties = razorpayProperties;
     }
 
     // ─── Haversine Formula Helper ───────────────────────────────────────────
@@ -96,9 +106,11 @@ public class MedicineOrderService {
         String method = request.getPaymentMethod() != null ? request.getPaymentMethod().toLowerCase() : "online";
         parentOrder.setPaymentMethod(method);
         if ("cod".equals(method)) {
-            parentOrder.setStatus("CONFIRMED"); // COD: confirmed, payment on delivery
+            parentOrder.setStatus("CONFIRMED"); // COD: confirmed
+            parentOrder.setPaymentStatus("TO_BE_PAID");
         } else {
-            parentOrder.setStatus("PAID"); // Online: payment received immediately
+            parentOrder.setStatus("PENDING"); // Online: pending verification
+            parentOrder.setPaymentStatus("PENDING");
         }
         
         MedicineOrder savedParent = orderRepository.save(parentOrder);
@@ -132,19 +144,38 @@ public class MedicineOrderService {
             childItem.setDeliveryEstimate(estimate);
 
             orderItemRepository.save(childItem);
-
-            // Decrement Stock
-            Optional<PharmacyInventory> inventoryOpt = inventoryRepository
-                    .findByPharmacyIdAndMedicineId(item.getPharmacyId(), item.getMedicineId());
-            if (inventoryOpt.isPresent()) {
-                PharmacyInventory inv = inventoryOpt.get();
-                int currentQty = inv.getQuantity();
-                inv.setQuantity(Math.max(0, currentQty - item.getQuantity()));
-                inventoryRepository.save(inv);
-            }
         }
 
-        return getOrderDetails(savedParent.getId());
+        MedicineOrderResponse response = getOrderDetails(savedParent.getId());
+        if ("online".equals(method)) {
+            if (razorpayService.isLiveMode()) {
+                try {
+                    Order razorpayOrder = razorpayService.createMedicineOrder(total, savedParent.getId());
+                    savedParent.setRazorpayOrderId(razorpayOrder.get("id"));
+                    orderRepository.save(savedParent);
+
+                    response.setRazorpayOrderId(razorpayOrder.get("id"));
+                    response.setRazorpayKeyId(razorpayProperties.getKeyId());
+                    response.setAmountPaise(razorpayService.toPaise(total));
+                    response.setCurrency("INR");
+                    response.setMockMode(false);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to create Razorpay order: " + e.getMessage());
+                }
+            } else {
+                String mockOrderId = razorpayService.createMockOrderId();
+                savedParent.setRazorpayOrderId(mockOrderId);
+                orderRepository.save(savedParent);
+
+                response.setRazorpayOrderId(mockOrderId);
+                response.setRazorpayKeyId("mock_key");
+                response.setAmountPaise(razorpayService.toPaise(total));
+                response.setCurrency("INR");
+                response.setMockMode(true);
+            }
+        }
+        response.setPaymentStatus(savedParent.getPaymentStatus());
+        return response;
     }
 
     // ─── Order Queries ───────────────────────────────────────────────────────
@@ -166,6 +197,18 @@ public class MedicineOrderService {
 
         List<MedicineOrderItem> items = orderItemRepository.findByPharmacyIdOrderByCreatedAtDesc(pharmacy.getId());
         return items.stream()
+                .filter(item -> {
+                    Optional<MedicineOrder> parentOpt = orderRepository.findById(item.getOrderId());
+                    if (parentOpt.isPresent()) {
+                        MedicineOrder parent = parentOpt.get();
+                        if ("online".equalsIgnoreCase(parent.getPaymentMethod())) {
+                            return "PAID".equalsIgnoreCase(parent.getPaymentStatus()) ||
+                                   "PROCESSING".equalsIgnoreCase(parent.getStatus()) ||
+                                   "DELIVERED".equalsIgnoreCase(parent.getStatus());
+                        }
+                    }
+                    return true;
+                })
                 .map(this::convertToDetailDto)
                 .collect(Collectors.toList());
     }
@@ -176,11 +219,24 @@ public class MedicineOrderService {
     public MedicineOrderItemDetail updateItemStatus(UUID itemId, String status) {
         MedicineOrderItem item = orderItemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Order item not found: " + itemId));
+        String oldStatus = item.getStatus();
         item.setStatus(status);
         if (item.getUpdatedAt() == null) {
             item.setUpdatedAt(LocalDateTime.now());
         }
         MedicineOrderItem savedItem = orderItemRepository.save(item);
+
+        // Decrement stock only when transitioning to SHIPPED
+        if ("SHIPPED".equalsIgnoreCase(status) && !"SHIPPED".equalsIgnoreCase(oldStatus)) {
+            Optional<PharmacyInventory> inventoryOpt = inventoryRepository
+                    .findByPharmacyIdAndMedicineId(item.getPharmacyId(), item.getMedicineId());
+            if (inventoryOpt.isPresent()) {
+                PharmacyInventory inv = inventoryOpt.get();
+                int currentQty = inv.getQuantity();
+                inv.setQuantity(Math.max(0, currentQty - item.getQuantity()));
+                inventoryRepository.save(inv);
+            }
+        }
 
         // Check if all sibling items in parent order are DELIVERED
         UUID parentId = item.getOrderId();
@@ -254,6 +310,8 @@ public class MedicineOrderService {
         resp.setUserLongitude(p.getUserLongitude());
         resp.setDeliveryAddress(p.getDeliveryAddress());
         resp.setCreatedAt(p.getCreatedAt());
+        resp.setPaymentStatus(p.getPaymentStatus());
+        resp.setRazorpayOrderId(p.getRazorpayOrderId());
 
         List<MedicineOrderItem> items = orderItemRepository.findByOrderId(parentId);
         List<MedicineOrderItemDetail> details = items.stream()
@@ -274,6 +332,14 @@ public class MedicineOrderService {
         detail.setPrice(item.getPrice());
         detail.setStatus(item.getStatus());
         detail.setDeliveryEstimate(item.getDeliveryEstimate());
+
+        // Resolve parent order info
+        Optional<MedicineOrder> parentOpt = orderRepository.findById(item.getOrderId());
+        if (parentOpt.isPresent()) {
+            MedicineOrder parent = parentOpt.get();
+            detail.setPaymentMethod(parent.getPaymentMethod());
+            detail.setPaymentStatus(parent.getPaymentStatus());
+        }
 
         // Resolve Pharmacy Name
         Pharmacy pharmacy = pharmacyRepository.findById(item.getPharmacyId()).orElse(null);
@@ -347,5 +413,53 @@ public class MedicineOrderService {
                 "May cause mild stomach upset or drowsiness. Consult doctor if symptoms persist."
             );
         }
+    }
+
+    @Transactional
+    public MedicineOrderResponse verifyPayment(VerifyOrderPaymentRequest request) {
+        MedicineOrder order = orderRepository.findById(request.getOrderId())
+                .orElseThrow(() -> new RuntimeException("Medicine order not found: " + request.getOrderId()));
+
+        if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+            return getOrderDetails(order.getId());
+        }
+
+        if (order.getRazorpayOrderId() == null || !order.getRazorpayOrderId().equals(request.getRazorpayOrderId())) {
+            throw new RuntimeException("Order ID mismatch");
+        }
+
+        boolean verified;
+        if (razorpayService.isLiveMode()) {
+            if (request.getRazorpaySignature() == null || request.getRazorpaySignature().isBlank()) {
+                throw new RuntimeException("Payment signature is required");
+            }
+            verified = razorpayService.verifySignature(
+                    request.getRazorpayOrderId(),
+                    request.getRazorpayPaymentId(),
+                    request.getRazorpaySignature());
+        } else {
+            verified = request.getRazorpayPaymentId() != null && !request.getRazorpayPaymentId().isBlank();
+        }
+
+        if (!verified) {
+            order.setPaymentStatus("FAILED");
+            orderRepository.save(order);
+            throw new RuntimeException("Payment verification failed");
+        }
+
+        order.setPaymentStatus("PAID");
+        order.setStatus("PAID");
+        MedicineOrder saved = orderRepository.save(order);
+
+        return getOrderDetails(saved.getId());
+    }
+
+    @Transactional
+    public MedicineOrderResponse confirmPayment(UUID orderId) {
+        MedicineOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+        order.setPaymentStatus("PAID");
+        MedicineOrder saved = orderRepository.save(order);
+        return getOrderDetails(saved.getId());
     }
 }

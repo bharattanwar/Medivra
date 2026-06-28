@@ -19,6 +19,61 @@ public class MedicineOrderResponse {
     private LocalDateTime createdAt;
     private List<MedicineOrderItemDetail> items;
 
+    private String razorpayOrderId;
+    private String razorpayKeyId;
+    private Long amountPaise;
+    private String currency;
+    private Boolean mockMode;
+    private String paymentStatus;
+
+    public String getRazorpayOrderId() {
+        return razorpayOrderId;
+    }
+
+    public void setRazorpayOrderId(String razorpayOrderId) {
+        this.razorpayOrderId = razorpayOrderId;
+    }
+
+    public String getRazorpayKeyId() {
+        return razorpayKeyId;
+    }
+
+    public void setRazorpayKeyId(String razorpayKeyId) {
+        this.razorpayKeyId = razorpayKeyId;
+    }
+
+    public Long getAmountPaise() {
+        return amountPaise;
+    }
+
+    public void setAmountPaise(Long amountPaise) {
+        this.amountPaise = amountPaise;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public Boolean getMockMode() {
+        return mockMode;
+    }
+
+    public void setMockMode(Boolean mockMode) {
+        this.mockMode = mockMode;
+    }
+
+    public String getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(String paymentStatus) {
+        this.paymentStatus = paymentStatus;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -121,6 +176,8 @@ public class MedicineOrderResponse {
         private String explanation;
         private String instructions;
         private String sideEffects;
+        private String paymentMethod;
+        private String paymentStatus;
 
         public UUID getId() {
             return id;
@@ -224,6 +281,22 @@ public class MedicineOrderResponse {
 
         public void setSideEffects(String sideEffects) {
             this.sideEffects = sideEffects;
+        }
+
+        public String getPaymentMethod() {
+            return paymentMethod;
+        }
+
+        public void setPaymentMethod(String paymentMethod) {
+            this.paymentMethod = paymentMethod;
+        }
+
+        public String getPaymentStatus() {
+            return paymentStatus;
+        }
+
+        public void setPaymentStatus(String paymentStatus) {
+            this.paymentStatus = paymentStatus;
         }
     }
 }

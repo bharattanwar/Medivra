@@ -35,6 +35,12 @@ public class MedicineOrder extends BaseEntity {
     @Column(name = "payment_method", length = 50)
     private String paymentMethod;
 
+    @Column(name = "razorpay_order_id")
+    private String razorpayOrderId;
+
+    @Column(name = "payment_status", nullable = false)
+    private String paymentStatus = "PENDING";
+
     public UUID getPatientId() {
         return patientId;
     }
@@ -97,5 +103,21 @@ public class MedicineOrder extends BaseEntity {
 
     public void setPaymentMethod(String paymentMethod) {
         this.paymentMethod = paymentMethod;
+    }
+
+    public String getRazorpayOrderId() {
+        return razorpayOrderId;
+    }
+
+    public void setRazorpayOrderId(String razorpayOrderId) {
+        this.razorpayOrderId = razorpayOrderId;
+    }
+
+    public String getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(String paymentStatus) {
+        this.paymentStatus = paymentStatus;
     }
 }

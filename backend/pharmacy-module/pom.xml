@@ -24,5 +24,10 @@
 			<artifactId>record-module</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>payment-module</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 	</dependencies>
 </project>

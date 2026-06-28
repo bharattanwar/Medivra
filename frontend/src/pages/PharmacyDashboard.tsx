@@ -48,6 +48,8 @@ interface PharmacyOrderItem {
   explanation: string;
   instructions: string;
   sideEffects: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
 }
 
 const PharmacyDashboard: React.FC = () => {
@@ -375,6 +377,17 @@ const PharmacyDashboard: React.FC = () => {
       }
     } catch {
       alert('Failed to update status.');
+    }
+  };
+
+  const handleConfirmPayment = async (orderId: string) => {
+    try {
+      const res = await api.put(`/medicine-orders/${orderId}/confirm-payment`);
+      if (res.data.success) {
+        await fetchOrders();
+      }
+    } catch {
+      alert('Failed to confirm payment.');
     }
   };
 
@@ -867,6 +880,11 @@ const PharmacyDashboard: React.FC = () => {
                           <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${getItemStatusClass(orderItem.status)}`}>
                             {orderItem.status}
                           </span>
+                          {orderItem.paymentMethod === 'cash' && (
+                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${orderItem.paymentStatus === 'PAID' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                              COD: {orderItem.paymentStatus === 'PAID' ? 'PAID' : 'TO BE PAID'}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500 mt-1.5">
                           Delivery Route Time Limit: <strong className="text-orange-700">{orderItem.deliveryEstimate}</strong>
@@ -918,8 +936,18 @@ const PharmacyDashboard: React.FC = () => {
                             </button>
                           )}
                           {orderItem.status === 'DELIVERED' && (
-                            <div className="flex-1 bg-green-50 text-green-700 border border-green-200 text-center py-2.5 rounded-xl font-bold flex items-center justify-center gap-1">
-                              ✓ Completed Fulfilling Order
+                            <div className="flex flex-col gap-2 flex-1">
+                              <div className="bg-green-50 text-green-700 border border-green-200 text-center py-2.5 rounded-xl font-bold flex items-center justify-center gap-1">
+                                ✓ Completed Fulfilling Order
+                              </div>
+                              {orderItem.paymentMethod === 'cash' && orderItem.paymentStatus !== 'PAID' && (
+                                <button
+                                  onClick={() => handleConfirmPayment(orderItem.orderId)}
+                                  className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  Confirm Cash Payment
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

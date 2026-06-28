@@ -27,6 +27,7 @@ interface MedicineOrder {
   prescriptionId?: string;
   status: string;
   paymentMethod?: string;
+  paymentStatus?: string;
   totalAmount: number;
   userLatitude: number;
   userLongitude: number;
@@ -140,16 +141,31 @@ const OrderTracking: React.FC = () => {
 
   const getPaymentBadge = (order: MedicineOrder) => {
     const isCod = order.paymentMethod === 'cod';
+    const isPaid = order.paymentStatus === 'PAID';
     if (isCod) {
+      if (isPaid) {
+        return (
+          <span className="flex items-center gap-1 text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+            <CheckCircle2 className="h-3 w-3" /> Paid (COD)
+          </span>
+        );
+      }
       return (
         <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-          <Truck className="h-3 w-3" /> Pay on Delivery
+          <Truck className="h-3 w-3" /> Pay on Delivery (To Be Paid)
+        </span>
+      );
+    }
+    if (isPaid) {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+          <Smartphone className="h-3 w-3" /> Paid Online
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
-        <Smartphone className="h-3 w-3" /> Paid Online
+      <span className="flex items-center gap-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
+        <Smartphone className="h-3 w-3" /> Unpaid Online
       </span>
     );
   };

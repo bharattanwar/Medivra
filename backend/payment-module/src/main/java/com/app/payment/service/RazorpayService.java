@@ -40,6 +40,15 @@ public class RazorpayService {
         return client.orders.create(orderRequest);
     }
 
+    public Order createMedicineOrder(BigDecimal amount, UUID orderId) throws RazorpayException {
+        RazorpayClient client = new RazorpayClient(properties.getKeyId(), properties.getKeySecret());
+        JSONObject orderRequest = new JSONObject();
+        orderRequest.put("amount", toPaise(amount));
+        orderRequest.put("currency", "INR");
+        orderRequest.put("receipt", "med_" + orderId.toString().substring(0, 8));
+        return client.orders.create(orderRequest);
+    }
+
     public boolean verifySignature(String orderId, String paymentId, String signature) {
         try {
             JSONObject options = new JSONObject();
