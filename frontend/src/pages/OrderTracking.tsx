@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, Truck, Calendar, Clock, Trash2, AlertCircle, Info,
-  RefreshCw, MapPin, Sparkles, X, CreditCard, Smartphone
+  RefreshCw, MapPin, Sparkles, X, Smartphone, CheckCircle2
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -187,7 +187,7 @@ const OrderTracking: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* COLUMN 1: Orders list */}
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
@@ -226,9 +226,8 @@ const OrderTracking: React.FC = () => {
                 {orders.map(order => (
                   <div
                     key={order.id}
-                    className={`bg-white border rounded-2xl p-5 shadow-sm transition-all ${
-                      selectedOrder?.id === order.id ? 'border-indigo-500 ring-2 ring-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
-                    }`}
+                    className={`bg-white border rounded-2xl p-5 shadow-sm transition-all ${selectedOrder?.id === order.id ? 'border-indigo-500 ring-2 ring-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
+                      }`}
                   >
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-100">
                       <div>
@@ -280,7 +279,7 @@ const OrderTracking: React.FC = () => {
                           const currentStep = getStatusStep(item.status);
                           return (
                             <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                              
+
                               {/* Header per Pharmacy Group */}
                               <div className="flex justify-between items-start gap-2 mb-4">
                                 <div>
@@ -316,17 +315,15 @@ const OrderTracking: React.FC = () => {
                                     return (
                                       <div key={step} className="flex flex-col items-center z-10">
                                         <div
-                                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border transition-all duration-300 ${
-                                            isDone
+                                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border transition-all duration-300 ${isDone
                                               ? 'bg-green-500 border-green-600 text-white scale-110'
                                               : 'bg-white border-slate-300 text-slate-400'
-                                          } ${isCurrent ? 'ring-4 ring-green-100' : ''}`}
+                                            } ${isCurrent ? 'ring-4 ring-green-100' : ''}`}
                                         >
                                           {isDone ? '✓' : idx + 1}
                                         </div>
-                                        <span className={`text-[10px] font-bold mt-2 ${
-                                          isDone ? 'text-slate-800' : 'text-slate-400'
-                                        } ${isCurrent ? 'text-green-600 font-extrabold' : ''}`}>
+                                        <span className={`text-[10px] font-bold mt-2 ${isDone ? 'text-slate-800' : 'text-slate-400'
+                                          } ${isCurrent ? 'text-green-600 font-extrabold' : ''}`}>
                                           {step}
                                         </span>
                                       </div>
@@ -380,7 +377,7 @@ const OrderTracking: React.FC = () => {
 
           {/* COLUMN 2: Refill Reminders and Setup */}
           <div className="space-y-6">
-            
+
             {/* Active Refill Reminders */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-4">
               <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
@@ -448,7 +445,7 @@ const OrderTracking: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <form onSubmit={handleCreateReminder} className="space-y-4">
               <p className="text-xs text-slate-500">
                 Configure when you will need a refill reminder for <strong className="text-slate-800">{reminderMed}</strong>.

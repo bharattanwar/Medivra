@@ -39,3 +39,5 @@ application-local.yml
 .env.*.local
 *.env
 backend/.env.local
+frontend/.env.development
+frontend/.env.production

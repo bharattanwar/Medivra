@@ -20,7 +20,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId }) => {
       formData.append('file', file);
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:8080/api/chat/upload', {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/chat/upload`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
