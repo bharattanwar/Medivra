@@ -7,6 +7,8 @@ import com.app.user.repository.UserRepository;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import org.springframework.scheduling.annotation.Async;
+
 @Component
 public class NotificationEventListener {
 
@@ -22,6 +24,7 @@ public class NotificationEventListener {
         this.emailService = emailService;
     }
 
+    @Async
     @EventListener
     public void handleNotificationEvent(NotificationEvent event) {
         // 1. Create DB and Live WebSocket notification

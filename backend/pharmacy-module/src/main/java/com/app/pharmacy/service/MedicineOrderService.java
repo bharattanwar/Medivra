@@ -21,6 +21,9 @@ import com.app.pharmacy.repository.RefillReminderRepository;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
 import com.razorpay.Order;
+import org.springframework.context.ApplicationEventPublisher;
+import com.app.common.event.NotificationEvent;
+import com.app.common.entity.NotificationType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +48,7 @@ public class MedicineOrderService {
     private final UserRepository userRepository;
     private final RazorpayService razorpayService;
     private final RazorpayProperties razorpayProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     public MedicineOrderService(MedicineOrderRepository orderRepository,
                                MedicineOrderItemRepository orderItemRepository,
@@ -54,7 +58,8 @@ public class MedicineOrderService {
                                PharmacyInventoryRepository inventoryRepository,
                                UserRepository userRepository,
                                RazorpayService razorpayService,
-                               RazorpayProperties razorpayProperties) {
+                               RazorpayProperties razorpayProperties,
+                               ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.refillReminderRepository = refillReminderRepository;
@@ -64,6 +69,7 @@ public class MedicineOrderService {
         this.userRepository = userRepository;
         this.razorpayService = razorpayService;
         this.razorpayProperties = razorpayProperties;
+        this.eventPublisher = eventPublisher;
     }
 
     // ─── Haversine Formula Helper ───────────────────────────────────────────
@@ -175,6 +181,18 @@ public class MedicineOrderService {
             }
         }
         response.setPaymentStatus(savedParent.getPaymentStatus());
+
+        if ("cod".equals(method)) {
+            eventPublisher.publishEvent(new NotificationEvent(
+                    this,
+                    savedParent.getPatientId(),
+                    "Order Confirmed",
+                    "Your medicine order has been successfully placed with Cash on Delivery and is pending fulfillment.",
+                    NotificationType.SYSTEM,
+                    savedParent.getId().toString()
+            ));
+        }
+
         return response;
     }
 
@@ -451,6 +469,15 @@ public class MedicineOrderService {
         order.setStatus("PAID");
         MedicineOrder saved = orderRepository.save(order);
 
+        eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                saved.getPatientId(),
+                "Payment Confirmed",
+                "Your online payment for the medicine order has been successfully verified.",
+                NotificationType.PAYMENT_SUCCESS,
+                saved.getId().toString()
+        ));
+
         return getOrderDetails(saved.getId());
     }
 
@@ -460,6 +487,16 @@ public class MedicineOrderService {
                 .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
         order.setPaymentStatus("PAID");
         MedicineOrder saved = orderRepository.save(order);
+
+        eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                saved.getPatientId(),
+                "Payment Confirmed",
+                "Your payment for the medicine order has been confirmed by the pharmacy.",
+                NotificationType.PAYMENT_SUCCESS,
+                saved.getId().toString()
+        ));
+
         return getOrderDetails(saved.getId());
     }
 }
