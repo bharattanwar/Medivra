@@ -54,7 +54,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     try {
       const response = await api.get('/notifications');
       setNotifications(response.data.data || []);
-      
+
       const unreadRes = await api.get('/notifications/unread-count');
       setUnreadCount(unreadRes.data.data || 0);
     } catch (err) {
@@ -102,7 +102,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     fetchNotifications();
 
     const stompClient = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
       reconnectDelay: 5000,
       connectHeaders: {
         Authorization: `Bearer ${token}`
