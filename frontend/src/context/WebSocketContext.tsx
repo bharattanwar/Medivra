@@ -24,6 +24,7 @@ interface WebSocketContextType {
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  sosUpdate: any | null;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -48,6 +49,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [sosUpdate, setSosUpdate] = useState<any | null>(null);
   const clientRef = useRef<Client | null>(null);
 
   const fetchNotifications = async () => {
@@ -134,6 +136,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             setPresence((prev: any) => ({ ...prev, [update.userId]: update.status }));
           }
         });
+
+        // Subscribe to SOS emergency updates
+        stompClient.subscribe('/user/queue/sos', (msg) => {
+          if (msg.body) {
+            const update = JSON.parse(msg.body);
+            setSosUpdate(update);
+          }
+        });
       },
       onStompError: (frame) => {
         console.error('Broker reported error: ' + frame.headers['message']);
@@ -175,7 +185,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       removeToast,
       fetchNotifications,
       markAsRead,
-      markAllAsRead
+      markAllAsRead,
+      sosUpdate,
     }}>
       {children}
     </WebSocketContext.Provider>

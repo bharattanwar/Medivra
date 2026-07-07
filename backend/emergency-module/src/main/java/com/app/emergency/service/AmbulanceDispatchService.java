@@ -1,0 +1,264 @@
+package com.app.emergency.service;
+
+import com.app.emergency.dto.AmbulanceLocationUpdate;
+import com.app.emergency.dto.NearbyAmbulanceResponse;
+import com.app.emergency.entity.*;
+import com.app.emergency.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+public class AmbulanceDispatchService {
+
+    private static final Logger log = LoggerFactory.getLogger(AmbulanceDispatchService.class);
+    private static final int MAX_DISPATCH_CANDIDATES = 5;
+    // Average ambulance speed assumption: 40 km/h in urban areas
+    private static final double AVG_SPEED_KMH = 40.0;
+
+    private final AmbulanceRepository ambulanceRepository;
+    private final AmbulanceDriverRepository driverRepository;
+    private final EmergencyRequestRepository emergencyRequestRepository;
+    private final EmergencyTimelineRepository timelineRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final EmergencyNotificationService notificationService;
+
+    public AmbulanceDispatchService(
+            AmbulanceRepository ambulanceRepository,
+            AmbulanceDriverRepository driverRepository,
+            EmergencyRequestRepository emergencyRequestRepository,
+            EmergencyTimelineRepository timelineRepository,
+            SimpMessagingTemplate messagingTemplate,
+            EmergencyNotificationService notificationService) {
+        this.ambulanceRepository = ambulanceRepository;
+        this.driverRepository = driverRepository;
+        this.emergencyRequestRepository = emergencyRequestRepository;
+        this.timelineRepository = timelineRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.notificationService = notificationService;
+    }
+
+    /**
+     * Finds nearby ambulances and pushes a WebSocket dispatch notification to each driver.
+     * The first driver to call acceptEmergency() wins (optimistic locking).
+     */
+    @Async
+    public void dispatchNearbyAmbulances(EmergencyRequest emergency) {
+        List<Ambulance> candidates = ambulanceRepository.findNearbyAvailableAmbulances(
+                emergency.getPatientLat(),
+                emergency.getPatientLng(),
+                emergency.getSearchRadiusKm(),
+                MAX_DISPATCH_CANDIDATES);
+
+        if (candidates.isEmpty()) {
+            log.warn("No ambulances found within {}km for emergency {}", emergency.getSearchRadiusKm(), emergency.getId());
+            return;
+        }
+
+        log.info("Dispatching to {} candidates for emergency {}", candidates.size(), emergency.getId());
+
+        for (Ambulance ambulance : candidates) {
+            NearbyAmbulanceResponse dispatchPayload = buildDispatchPayload(ambulance, emergency);
+            // Push to driver's personal WebSocket queue
+            if (ambulance.getDriverId() != null) {
+                messagingTemplate.convertAndSendToUser(
+                        ambulance.getDriverId().toString(),
+                        "/queue/ambulance-dispatch",
+                        dispatchPayload);
+            }
+        }
+
+        // Record timeline
+        recordTimeline(emergency.getId(), EmergencyTimelineEvent.AMBULANCE_FOUND,
+                candidates.size() + " ambulance(s) notified");
+    }
+
+    /**
+     * First-accept-wins: uses @Version optimistic locking on EmergencyRequest.
+     */
+    @Transactional
+    public EmergencyRequest acceptEmergency(UUID emergencyId, UUID ambulanceId) {
+        EmergencyRequest emergency = emergencyRequestRepository.findById(emergencyId)
+                .orElseThrow(() -> new RuntimeException("Emergency not found"));
+
+        if (emergency.getStatus() != EmergencyStatus.SEARCHING &&
+                emergency.getStatus() != EmergencyStatus.PENDING) {
+            throw new RuntimeException("Emergency already assigned or closed");
+        }
+
+        Ambulance ambulance = ambulanceRepository.findById(ambulanceId)
+                .orElseThrow(() -> new RuntimeException("Ambulance not found"));
+
+        if (!ambulance.getIsAvailable() || !ambulance.getIsOnline()) {
+            throw new RuntimeException("Ambulance is not available");
+        }
+
+        // Calculate ETA
+        double distanceKm = haversineDistance(
+                emergency.getPatientLat(), emergency.getPatientLng(),
+                ambulance.getCurrentLat(), ambulance.getCurrentLng());
+        int etaMinutes = (int) Math.ceil((distanceKm / AVG_SPEED_KMH) * 60);
+
+        // Assign (optimistic lock will throw if another thread just won the race)
+        try {
+            emergency.setAssignedAmbulanceId(ambulanceId);
+            emergency.setStatus(EmergencyStatus.AMBULANCE_ASSIGNED);
+            emergency.setEstimatedArrivalMinutes(etaMinutes);
+            emergency = emergencyRequestRepository.save(emergency);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new RuntimeException("Another ambulance already accepted this emergency");
+        }
+
+        // Mark ambulance as busy
+        ambulance.setIsAvailable(false);
+        ambulanceRepository.save(ambulance);
+
+        // Timeline
+        recordTimeline(emergencyId, EmergencyTimelineEvent.DRIVER_ACCEPTED,
+                "Ambulance " + ambulance.getVehicleNumber() + " accepted. ETA: " + etaMinutes + " min");
+        recordTimeline(emergencyId, EmergencyTimelineEvent.DRIVER_EN_ROUTE, "Ambulance en route to patient");
+
+        // Broadcast to patient
+        notificationService.broadcastStatusUpdate(emergency);
+
+        return emergency;
+    }
+
+    @Transactional
+    public void updateAmbulanceLocation(UUID ambulanceId, double lat, double lng) {
+        Optional<Ambulance> ambulanceOpt = ambulanceRepository.findById(ambulanceId);
+        if (ambulanceOpt.isEmpty()) return;
+
+        Ambulance ambulance = ambulanceOpt.get();
+        ambulance.setCurrentLat(lat);
+        ambulance.setCurrentLng(lng);
+        ambulance.setLastLocationUpdate(LocalDateTime.now());
+        ambulanceRepository.save(ambulance);
+
+        // Find active emergency for this ambulance and broadcast location
+        emergencyRequestRepository.findByStatusInOrderByCreatedAtAsc(
+                List.of(EmergencyStatus.AMBULANCE_ASSIGNED, EmergencyStatus.EN_ROUTE,
+                        EmergencyStatus.ARRIVED_AT_PATIENT, EmergencyStatus.TRANSPORTING))
+                .stream()
+                .filter(e -> ambulanceId.equals(e.getAssignedAmbulanceId()))
+                .findFirst()
+                .ifPresent(emergency -> {
+                    double distKm = haversineDistance(
+                            emergency.getPatientLat(), emergency.getPatientLng(), lat, lng);
+                    int etaMin = (int) Math.ceil((distKm / AVG_SPEED_KMH) * 60);
+
+                    AmbulanceLocationUpdate update = new AmbulanceLocationUpdate(
+                            ambulanceId, emergency.getId(), lat, lng, LocalDateTime.now(), etaMin);
+
+                    // Broadcast to all subscribers of this emergency
+                    messagingTemplate.convertAndSend(
+                            "/topic/emergency/" + emergency.getId(), update);
+                });
+    }
+
+    @Transactional
+    public EmergencyRequest updateTripStatus(UUID emergencyId, UUID ambulanceId, EmergencyStatus newStatus, String notes) {
+        EmergencyRequest emergency = emergencyRequestRepository.findById(emergencyId)
+                .orElseThrow(() -> new RuntimeException("Emergency not found"));
+
+        if (!ambulanceId.equals(emergency.getAssignedAmbulanceId())) {
+            throw new RuntimeException("Not the assigned ambulance for this emergency");
+        }
+
+        emergency.setStatus(newStatus);
+        emergency = emergencyRequestRepository.save(emergency);
+
+        // Map status to timeline event
+        EmergencyTimelineEvent event = mapStatusToTimelineEvent(newStatus);
+        if (event != null) {
+            recordTimeline(emergencyId, event, notes != null ? notes : event.name().replace("_", " "));
+        }
+
+        // If completed, free the ambulance
+        if (newStatus == EmergencyStatus.COMPLETED || newStatus == EmergencyStatus.ARRIVED_AT_HOSPITAL) {
+            ambulanceRepository.findById(ambulanceId).ifPresent(amb -> {
+                amb.setIsAvailable(true);
+                ambulanceRepository.save(amb);
+            });
+            if (newStatus == EmergencyStatus.ARRIVED_AT_HOSPITAL) {
+                recordTimeline(emergencyId, EmergencyTimelineEvent.HOSPITAL_ARRIVED, "Patient delivered to hospital");
+            }
+        }
+
+        notificationService.broadcastStatusUpdate(emergency);
+        return emergency;
+    }
+
+    // ---- Helpers ----
+
+    private NearbyAmbulanceResponse buildDispatchPayload(Ambulance ambulance, EmergencyRequest emergency) {
+        NearbyAmbulanceResponse payload = new NearbyAmbulanceResponse();
+        payload.setAmbulanceId(ambulance.getId());
+        payload.setVehicleNumber(ambulance.getVehicleNumber());
+        payload.setAmbulanceType(ambulance.getAmbulanceType().name());
+        payload.setDriverLat(ambulance.getCurrentLat());
+        payload.setDriverLng(ambulance.getCurrentLng());
+
+        if (ambulance.getCurrentLat() != null && ambulance.getCurrentLng() != null) {
+            double dist = haversineDistance(
+                    emergency.getPatientLat(), emergency.getPatientLng(),
+                    ambulance.getCurrentLat(), ambulance.getCurrentLng());
+            payload.setDistanceKm(Math.round(dist * 10.0) / 10.0);
+            payload.setEstimatedMinutes((int) Math.ceil((dist / AVG_SPEED_KMH) * 60));
+        }
+
+        if (ambulance.getDriverId() != null) {
+            driverRepository.findById(ambulance.getDriverId()).ifPresent(driver -> {
+                payload.setDriverId(driver.getId());
+                payload.setDriverName(driver.getFullName());
+                payload.setDriverPhone(driver.getPhone());
+            });
+        }
+
+        return payload;
+    }
+
+    private void recordTimeline(UUID emergencyId, EmergencyTimelineEvent event, String description) {
+        EmergencyTimeline entry = new EmergencyTimeline();
+        entry.setEmergencyId(emergencyId);
+        entry.setEvent(event);
+        entry.setDescription(description);
+        entry.setEventTimestamp(LocalDateTime.now());
+        timelineRepository.save(entry);
+    }
+
+    private EmergencyTimelineEvent mapStatusToTimelineEvent(EmergencyStatus status) {
+        return switch (status) {
+            case EN_ROUTE -> EmergencyTimelineEvent.DRIVER_EN_ROUTE;
+            case ARRIVED_AT_PATIENT -> EmergencyTimelineEvent.DRIVER_ARRIVED;
+            case TRANSPORTING -> EmergencyTimelineEvent.PATIENT_PICKED_UP;
+            case ARRIVED_AT_HOSPITAL -> EmergencyTimelineEvent.EN_ROUTE_TO_HOSPITAL;
+            case COMPLETED -> EmergencyTimelineEvent.EMERGENCY_CLOSED;
+            default -> null;
+        };
+    }
+
+    /**
+     * Haversine formula — same math used in pharmacy-module.
+     */
+    public static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+}

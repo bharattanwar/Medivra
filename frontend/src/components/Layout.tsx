@@ -70,6 +70,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       <Link to="/admin/appointments" className={navLinkClass('/admin/appointments')}>
                         Appointments/Payments
                       </Link>
+                      <Link to="/hospital/emergencies" className={navLinkClass('/hospital/emergencies')}>
+                        Emergency Ops
+                      </Link>
                     </>
                   ) : isPharmacy ? (
                     <>
@@ -105,6 +108,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       </Link>
                       <Link to="/patient/payments" className={navLinkClass('/patient/payments')}>
                         Payments
+                      </Link>
+                      <Link
+                        to="/patient/emergency"
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          location.pathname === '/patient/emergency'
+                            ? 'bg-red-600 text-white shadow-lg shadow-red-500/30'
+                            : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
+                        }`}
+                      >
+                        🚨 SOS
                       </Link>
                     </>
                   ) : null}

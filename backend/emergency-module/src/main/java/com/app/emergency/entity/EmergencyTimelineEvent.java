@@ -1,0 +1,16 @@
+package com.app.emergency.entity;
+
+public enum EmergencyTimelineEvent {
+    SOS_CREATED,
+    SEARCH_STARTED,
+    AMBULANCE_FOUND,
+    DRIVER_ACCEPTED,
+    DRIVER_EN_ROUTE,
+    DRIVER_ARRIVED,
+    PATIENT_PICKED_UP,
+    EN_ROUTE_TO_HOSPITAL,
+    HOSPITAL_ARRIVED,
+    EMERGENCY_CLOSED,
+    ESCALATED,
+    CANCELLED
+}

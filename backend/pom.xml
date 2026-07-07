@@ -31,6 +31,7 @@
 		<module>chat-module</module>
 		<module>notification-module</module>
 		<module>pharmacy-module</module>
+		<module>emergency-module</module>
 		<module>application</module>
 	</modules>
 
@@ -84,6 +85,11 @@
 			<dependency>
 				<groupId>com.app</groupId>
 				<artifactId>pharmacy-module</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.app</groupId>
+				<artifactId>emergency-module</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

@@ -18,6 +18,9 @@ import PharmacyRegistration from './pages/PharmacyRegistration';
 import PharmacyDashboard from './pages/PharmacyDashboard';
 import PharmacyFinder from './pages/PharmacyFinder';
 import OrderTracking from './pages/OrderTracking';
+import EmergencySOS from './pages/EmergencySOS';
+import AmbulanceDashboard from './pages/AmbulanceDashboard';
+import HospitalEmergencyDashboard from './pages/HospitalEmergencyDashboard';
 
 import { WebSocketProvider } from './context/WebSocketContext';
 
@@ -50,6 +53,11 @@ function App() {
             <Route path="/pharmacy/dashboard" element={<PharmacyDashboard />} />
             <Route path="/patient/pharmacy" element={<PharmacyFinder />} />
             <Route path="/patient/orders" element={<OrderTracking />} />
+
+            {/* Emergency SOS Routes */}
+            <Route path="/patient/emergency" element={<EmergencySOS />} />
+            <Route path="/ambulance/dashboard" element={<AmbulanceDashboard />} />
+            <Route path="/hospital/emergencies" element={<HospitalEmergencyDashboard />} />
           </Routes>
         </Layout>
       </Router>
