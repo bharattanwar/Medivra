@@ -49,13 +49,34 @@ const InputField: React.FC<InputFieldProps> = ({
   </div>
 );
 
-// ── Geocode an address string using OSM Nominatim (free, no API key) ──────────
+// ── Geocode an address string using OSM Nominatim (free, no API key) with Smart Fallback ──────────
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-  const data = await res.json();
-  if (data.length === 0) return null;
-  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  let currentSearch = address;
+  
+  // Try up to 3 times, stripping the first segment (before the comma) to broaden the search
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!currentSearch.trim()) break;
+    
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(currentSearch.trim())}&format=json&limit=1`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      
+      if (data && data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+    } catch (err) {
+      console.warn("Geocode attempt failed:", err);
+    }
+    
+    // If not found, strip the most specific part (everything before the first comma)
+    const commaIndex = currentSearch.indexOf(',');
+    if (commaIndex === -1) break; // No more commas to split by
+    
+    currentSearch = currentSearch.substring(commaIndex + 1);
+  }
+  
+  return null;
 }
 
 const PharmacyRegistration: React.FC = () => {
@@ -143,9 +164,10 @@ const PharmacyRegistration: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!coords) {
-      setError('Please set your pharmacy location before registering.');
+      setError('Please set your pharmacy location coordinates. Use the Look Up or GPS button below.');
       return;
     }
+    
     try {
       setLoading(true);
       const response = await api.post('/pharmacies/register', {
@@ -302,9 +324,23 @@ const PharmacyRegistration: React.FC = () => {
                   </button>
                 </div>
                 {geocodeError && (
-                  <p className="text-xs text-red-600 flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {geocodeError}
-                  </p>
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /> 
+                    <div>
+                      <strong>{geocodeError}</strong>
+                      <p className="mt-1 text-slate-700 opacity-90">
+                        Don't worry, you can still register! Just enter your latitude and longitude manually in the coordinate fields below.
+                      </p>
+                      <a 
+                        href="https://support.google.com/maps/answer/18539?hl=en" 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="inline-block mt-1 text-indigo-600 hover:text-indigo-800 underline font-semibold"
+                      >
+                        How to find coordinates on Google Maps ↗
+                      </a>
+                    </div>
+                  </div>
                 )}
                 <p className="text-xs text-slate-400">
                   Tip: For best results include city, state and country — e.g. "12 MG Road, Bengaluru, Karnataka, India"

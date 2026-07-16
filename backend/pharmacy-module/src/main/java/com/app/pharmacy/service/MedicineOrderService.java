@@ -357,11 +357,22 @@ public class MedicineOrderService {
             MedicineOrder parent = parentOpt.get();
             detail.setPaymentMethod(parent.getPaymentMethod());
             detail.setPaymentStatus(parent.getPaymentStatus());
+            detail.setOrderDate(parent.getCreatedAt());
+            detail.setDeliveryAddress(parent.getDeliveryAddress());
+            detail.setUserLatitude(parent.getUserLatitude());
+            detail.setUserLongitude(parent.getUserLongitude());
         }
 
         // Resolve Pharmacy Name
         Pharmacy pharmacy = pharmacyRepository.findById(item.getPharmacyId()).orElse(null);
-        detail.setPharmacyName(pharmacy != null ? pharmacy.getName() : "Unknown Pharmacy");
+        if (pharmacy != null) {
+            detail.setPharmacyName(pharmacy.getName());
+            detail.setPharmacyAddress(pharmacy.getAddress());
+            detail.setPharmacyLatitude(pharmacy.getLatitude());
+            detail.setPharmacyLongitude(pharmacy.getLongitude());
+        } else {
+            detail.setPharmacyName("Unknown Pharmacy");
+        }
 
         // Resolve Medicine Name
         Medicine medicine = medicineRepository.findById(item.getMedicineId()).orElse(null);

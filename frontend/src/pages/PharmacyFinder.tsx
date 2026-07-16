@@ -85,13 +85,25 @@ type PrescriptionSource = 'select' | 'upload';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// ── Geocode an address string using OSM Nominatim (free, no API key) ────────────
+// ── Geocode an address string using OSM Nominatim (free, no API key) with Smart Fallback ──────────
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-  const data = await res.json();
-  if (data.length === 0) return null;
-  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  let currentSearch = address;
+  
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!currentSearch.trim()) break;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(currentSearch.trim())}&format=json&limit=1`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    } catch (err) {
+      console.warn("Geocode attempt failed:", err);
+    }
+    const commaIndex = currentSearch.indexOf(',');
+    if (commaIndex === -1) break;
+    currentSearch = currentSearch.substring(commaIndex + 1);
+  }
+  return null;
 }
 
 const PharmacyFinder: React.FC = () => {

@@ -178,6 +178,13 @@ public class MedicineOrderResponse {
         private String sideEffects;
         private String paymentMethod;
         private String paymentStatus;
+        private LocalDateTime orderDate;
+        private String deliveryAddress;
+        private Double userLatitude;
+        private Double userLongitude;
+        private Double pharmacyLatitude;
+        private Double pharmacyLongitude;
+        private String pharmacyAddress;
 
         public UUID getId() {
             return id;
@@ -297,6 +304,62 @@ public class MedicineOrderResponse {
 
         public void setPaymentStatus(String paymentStatus) {
             this.paymentStatus = paymentStatus;
+        }
+
+        public LocalDateTime getOrderDate() {
+            return orderDate;
+        }
+
+        public void setOrderDate(LocalDateTime orderDate) {
+            this.orderDate = orderDate;
+        }
+
+        public String getDeliveryAddress() {
+            return deliveryAddress;
+        }
+
+        public void setDeliveryAddress(String deliveryAddress) {
+            this.deliveryAddress = deliveryAddress;
+        }
+
+        public Double getUserLatitude() {
+            return userLatitude;
+        }
+
+        public void setUserLatitude(Double userLatitude) {
+            this.userLatitude = userLatitude;
+        }
+
+        public Double getUserLongitude() {
+            return userLongitude;
+        }
+
+        public void setUserLongitude(Double userLongitude) {
+            this.userLongitude = userLongitude;
+        }
+
+        public Double getPharmacyLatitude() {
+            return pharmacyLatitude;
+        }
+
+        public void setPharmacyLatitude(Double pharmacyLatitude) {
+            this.pharmacyLatitude = pharmacyLatitude;
+        }
+
+        public Double getPharmacyLongitude() {
+            return pharmacyLongitude;
+        }
+
+        public void setPharmacyLongitude(Double pharmacyLongitude) {
+            this.pharmacyLongitude = pharmacyLongitude;
+        }
+
+        public String getPharmacyAddress() {
+            return pharmacyAddress;
+        }
+
+        public void setPharmacyAddress(String pharmacyAddress) {
+            this.pharmacyAddress = pharmacyAddress;
         }
     }
 }
