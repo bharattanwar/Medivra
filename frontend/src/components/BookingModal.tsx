@@ -8,6 +8,8 @@ interface BookingModalProps {
     fullName: string;
     specialization: string;
     consultationFee: number;
+    availableInClinic?: boolean;
+    availableVideo?: boolean;
   };
   onClose: () => void;
   onSuccess: () => void;
@@ -16,6 +18,9 @@ interface BookingModalProps {
 const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess }) => {
   const [date, setDate] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
+  const [consultationType, setConsultationType] = useState<'ONLINE' | 'IN_CLINIC'>(
+    doctor.availableVideo === false ? 'IN_CLINIC' : 'ONLINE'
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -96,23 +101,29 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
         doctorId: doctor.id,
         patientId: patientId,
         appointmentDate: date,
-        timeSlot: timeSlot
+        timeSlot: timeSlot,
+        consultationType: consultationType
       });
 
       const appointmentId = bookingResponse.data.id;
 
-      await processConsultationPayment({
-        appointmentId,
-        patientId,
-        doctorName: doctor.fullName,
-        amount: doctor.consultationFee,
-        onSuccess: () => {
-          onSuccess();
-        },
-        onError: (message) => {
-          setError(message);
-        },
-      });
+      if (consultationType === 'IN_CLINIC') {
+        // Direct booking completion - no Razorpay payment upfront
+        onSuccess();
+      } else {
+        await processConsultationPayment({
+          appointmentId,
+          patientId,
+          doctorName: doctor.fullName,
+          amount: doctor.consultationFee,
+          onSuccess: () => {
+            onSuccess();
+          },
+          onError: (message) => {
+            setError(message);
+          },
+        });
+      }
     } catch (err: any) {
       console.error('Booking error:', err);
       setError(err.response?.data?.message || 'Failed to book appointment. Please try again.');
@@ -145,6 +156,40 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
           )}
 
           <div className="space-y-2">
+            <label className="block text-sm font-bold text-gray-700">Consultation Type</label>
+            <div className="grid grid-cols-2 gap-4">
+              {doctor.availableVideo !== false && (
+                <button
+                  type="button"
+                  onClick={() => setConsultationType('ONLINE')}
+                  className={`px-4 py-3 rounded-xl border text-center transition-all font-bold ${
+                    doctor.availableInClinic === false ? 'col-span-2' : ''
+                  } ${consultationType === 'ONLINE'
+                    ? 'bg-blue-50 border-blue-600 text-blue-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  🌐 Video Consult
+                </button>
+              )}
+              {doctor.availableInClinic !== false && (
+                <button
+                  type="button"
+                  onClick={() => setConsultationType('IN_CLINIC')}
+                  className={`px-4 py-3 rounded-xl border text-center transition-all font-bold ${
+                    doctor.availableVideo === false ? 'col-span-2' : ''
+                  } ${consultationType === 'IN_CLINIC'
+                    ? 'bg-blue-50 border-blue-600 text-blue-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  🏥 In-Clinic
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <label className="block text-sm font-bold text-gray-700">Select Date</label>
             <input
               type="date"
@@ -170,8 +215,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
                     type="button"
                     onClick={() => setTimeSlot(slot)}
                     className={`w-full text-left px-4 py-3 rounded-xl border transition-all font-medium ${timeSlot === slot
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                        : 'border-gray-100 hover:border-blue-300 hover:bg-blue-50 text-gray-600'
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                      : 'border-gray-100 hover:border-blue-300 hover:bg-blue-50 text-gray-600'
                       }`}
                   >
                     {slot}
@@ -187,7 +232,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
 
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
             <div>
-              <p className="text-xs text-gray-500 uppercase">Total Fee</p>
+              <p className="text-xs text-gray-500 uppercase">
+                {consultationType === 'IN_CLINIC' ? 'Pay at Clinic' : 'Total Fee'}
+              </p>
               <p className="text-xl font-bold text-gray-900">₹{doctor.consultationFee}</p>
             </div>
             <button
@@ -202,7 +249,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
                   Processing...
                 </>
               ) : (
-                'Book & Pay'
+                consultationType === 'IN_CLINIC' ? 'Book (Pay at Clinic)' : 'Book & Pay'
               )}
             </button>
           </div>

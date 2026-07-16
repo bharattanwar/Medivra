@@ -15,12 +15,14 @@ public class DoctorDTO {
     private Double rating;
     private String profileImageUrl;
     private Boolean isAvailable;
+    private Boolean availableInClinic;
+    private Boolean availableVideo;
 
     public DoctorDTO() {}
 
     public DoctorDTO(UUID id, String fullName, String email, String specialization, Integer experienceYears,
                      BigDecimal consultationFee, String hospitalName, String city, Double rating,
-                     String profileImageUrl, Boolean isAvailable) {
+                     String profileImageUrl, Boolean isAvailable, Boolean availableInClinic, Boolean availableVideo) {
         this.id = id;
         this.fullName = fullName;
         this.email = email;
@@ -32,6 +34,8 @@ public class DoctorDTO {
         this.rating = rating;
         this.profileImageUrl = profileImageUrl;
         this.isAvailable = isAvailable;
+        this.availableInClinic = availableInClinic;
+        this.availableVideo = availableVideo;
     }
 
     // Getters and Setters
@@ -67,4 +71,10 @@ public class DoctorDTO {
 
     public Boolean getIsAvailable() { return isAvailable; }
     public void setIsAvailable(Boolean isAvailable) { this.isAvailable = isAvailable; }
+
+    public Boolean getAvailableInClinic() { return availableInClinic; }
+    public void setAvailableInClinic(Boolean availableInClinic) { this.availableInClinic = availableInClinic; }
+
+    public Boolean getAvailableVideo() { return availableVideo; }
+    public void setAvailableVideo(Boolean availableVideo) { this.availableVideo = availableVideo; }
 }

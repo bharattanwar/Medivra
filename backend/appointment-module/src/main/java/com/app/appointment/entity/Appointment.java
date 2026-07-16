@@ -29,6 +29,10 @@ public class Appointment extends BaseEntity {
     @Column(nullable = false)
     private AppointmentStatus status = AppointmentStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "consultation_type", nullable = false)
+    private ConsultationType consultationType = ConsultationType.ONLINE;
+
     @Column(name = "cancellation_reason")
     private String cancellationReason;
 
@@ -113,5 +117,13 @@ public class Appointment extends BaseEntity {
 
     public void setPreviousStatus(AppointmentStatus previousStatus) {
         this.previousStatus = previousStatus;
+    }
+
+    public ConsultationType getConsultationType() {
+        return consultationType;
+    }
+
+    public void setConsultationType(ConsultationType consultationType) {
+        this.consultationType = consultationType;
     }
 }

@@ -1,5 +1,6 @@
 package com.app.appointment.dto;
 
+import com.app.appointment.entity.ConsultationType;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -8,6 +9,7 @@ public class AppointmentRequest {
     private UUID patientId;
     private LocalDate appointmentDate;
     private String timeSlot;
+    private ConsultationType consultationType;
 
     public UUID getDoctorId() {
         return doctorId;
@@ -39,5 +41,13 @@ public class AppointmentRequest {
 
     public void setTimeSlot(String timeSlot) {
         this.timeSlot = timeSlot;
+    }
+
+    public ConsultationType getConsultationType() {
+        return consultationType;
+    }
+
+    public void setConsultationType(ConsultationType consultationType) {
+        this.consultationType = consultationType;
     }
 }

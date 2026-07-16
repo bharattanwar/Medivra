@@ -40,10 +40,14 @@ public class RefundEventListener {
                 if (payment.getPaymentStatus() == PaymentStatus.PAID) {
                     paymentService.initiateRefund(payment.getId());
                     System.out.println("Refund initiated for appointment: " + event.getAppointmentId());
+                } else if ("PAY_AT_CLINIC".equals(payment.getMethod())) {
+                    payment.setPaymentStatus(PaymentStatus.FAILED);
+                    paymentRepository.save(payment);
+                    System.out.println("In-clinic payment marked as FAILED (cancelled) for appointment: " + event.getAppointmentId());
                 }
             }
         } catch (Exception e) {
-            System.err.println("Failed to process refund for appointment " + event.getAppointmentId() + ": " + e.getMessage());
+            System.err.println("Failed to process cancellation/refund for appointment " + event.getAppointmentId() + ": " + e.getMessage());
         }
     }
 
@@ -64,6 +68,24 @@ public class RefundEventListener {
             }
         } catch (Exception e) {
             System.err.println("Failed to transfer payment for rescheduled appointment: " + e.getMessage());
+        }
+    }
+
+    @EventListener
+    public void handleInClinicBookingEvent(com.app.common.event.InClinicBookingEvent event) {
+        try {
+            Optional<Appointment> appointmentOpt = appointmentRepository.findById(event.getAppointmentId());
+            if (appointmentOpt.isPresent()) {
+                Payment payment = new Payment();
+                payment.setAppointment(appointmentOpt.get());
+                payment.setAmount(event.getAmount());
+                payment.setPaymentStatus(PaymentStatus.PENDING);
+                payment.setMethod("PAY_AT_CLINIC");
+                paymentRepository.save(payment);
+                System.out.println("In-clinic payment record created for appointment: " + event.getAppointmentId());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to create in-clinic payment for appointment " + event.getAppointmentId() + ": " + e.getMessage());
         }
     }
 }

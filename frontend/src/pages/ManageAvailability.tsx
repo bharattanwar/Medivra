@@ -11,6 +11,8 @@ const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'
 
 const ManageAvailability: React.FC = () => {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
+  const [availableInClinic, setAvailableInClinic] = useState(true);
+  const [availableVideo, setAvailableVideo] = useState(true);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -25,6 +27,12 @@ const ManageAvailability: React.FC = () => {
       const userId = localStorage.getItem('userId');
       const response = await api.get(`/doctors/availability?userId=${userId}`);
       setAvailabilities(response.data);
+
+      const doctorResponse = await api.get(`/doctors/user/${userId}`);
+      if (doctorResponse.data && doctorResponse.data.data) {
+        setAvailableInClinic(doctorResponse.data.data.availableInClinic ?? true);
+        setAvailableVideo(doctorResponse.data.data.availableVideo ?? true);
+      }
     } catch (error) {
       console.error('Error fetching availability:', error);
     } finally {
@@ -49,16 +57,28 @@ const ManageAvailability: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!availableInClinic && !availableVideo) {
+      setMessage('At least one consultation type must be enabled.');
+      setTimeout(() => setMessage(''), 4000);
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage('');
       const userId = localStorage.getItem('userId');
+      
+      // Save schedule
       await api.post(`/doctors/availability?userId=${userId}`, availabilities);
+      
+      // Save consultation types
+      await api.put(`/doctors/profile/availability-types?userId=${userId}&availableInClinic=${availableInClinic}&availableVideo=${availableVideo}`);
+
       setMessage('Availability saved successfully!');
       setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving availability:', error);
-      setMessage('Failed to save availability.');
+      setMessage(error.response?.data?.message || 'Failed to save availability.');
     } finally {
       setSaving(false);
     }
@@ -86,6 +106,55 @@ const ManageAvailability: React.FC = () => {
             {message}
           </div>
         )}
+
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Consultation Methods</h2>
+          <p className="text-sm text-gray-500 mb-6">Specify how patients can consult with you. You must select at least one method.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <label className={`flex items-start gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+              availableVideo 
+                ? 'border-blue-600 bg-blue-50/10' 
+                : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="checkbox"
+                checked={availableVideo}
+                onChange={(e) => setAvailableVideo(e.target.checked)}
+                className="mt-1 h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+              />
+              <div>
+                <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                  🌐 Online Video Consultation
+                </span>
+                <span className="text-xs text-gray-500 mt-1 block leading-relaxed">
+                  Patients will be able to book online video consultations and join video rooms.
+                </span>
+              </div>
+            </label>
+
+            <label className={`flex items-start gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+              availableInClinic 
+                ? 'border-blue-600 bg-blue-50/10' 
+                : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="checkbox"
+                checked={availableInClinic}
+                onChange={(e) => setAvailableInClinic(e.target.checked)}
+                className="mt-1 h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+              />
+              <div>
+                <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                  🏥 In-Clinic Consultation
+                </span>
+                <span className="text-xs text-gray-500 mt-1 block leading-relaxed">
+                  Patients will book clinic visits and pay directly at your clinic.
+                </span>
+              </div>
+            </label>
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-20">

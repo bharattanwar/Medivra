@@ -13,6 +13,8 @@ interface DoctorProps {
     rating?: number;
     profileImageUrl?: string;
     isAvailable?: boolean;
+    availableInClinic?: boolean;
+    availableVideo?: boolean;
   };
   onBookNow?: (doctor: DoctorProps['doctor']) => void;
 }
@@ -48,6 +50,18 @@ const DoctorCard: React.FC<DoctorProps> = ({ doctor, onBookNow }) => {
               Dr. {doctor.fullName}
             </h3>
             <p className="text-blue-600 font-semibold text-sm">{doctor.specialization}</p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {doctor.availableVideo !== false && (
+                <span className="text-[10px] bg-sky-50 text-sky-700 px-2 py-0.5 rounded-md font-bold border border-sky-100 flex items-center gap-0.5">
+                  🌐 Video
+                </span>
+              )}
+              {doctor.availableInClinic !== false && (
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-bold border border-indigo-100 flex items-center gap-0.5">
+                  🏥 In-Clinic
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg shrink-0">
             <Star className="h-4 w-4 text-amber-500 fill-amber-500" />

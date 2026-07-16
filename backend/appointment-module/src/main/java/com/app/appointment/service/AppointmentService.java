@@ -77,21 +77,52 @@ public class AppointmentService {
         appointment.setPatient(patient);
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setTimeSlot(request.getTimeSlot());
-        appointment.setStatus(AppointmentStatus.PENDING);
+        if (request.getConsultationType() != null) {
+            appointment.setConsultationType(request.getConsultationType());
+        }
+
+        // Validate doctor's consultation type availability
+        if (appointment.getConsultationType() == com.app.appointment.entity.ConsultationType.IN_CLINIC && !Boolean.TRUE.equals(doctor.getAvailableInClinic())) {
+            throw new RuntimeException("This doctor is not available for in-clinic consultations.");
+        }
+        if (appointment.getConsultationType() == com.app.appointment.entity.ConsultationType.ONLINE && !Boolean.TRUE.equals(doctor.getAvailableVideo())) {
+            throw new RuntimeException("This doctor is not available for video consultations.");
+        }
+        
+        if (appointment.getConsultationType() == com.app.appointment.entity.ConsultationType.IN_CLINIC) {
+            appointment.setStatus(AppointmentStatus.CONFIRMED);
+        } else {
+            appointment.setStatus(AppointmentStatus.PENDING);
+        }
 
         Appointment savedAppointment = appointmentRepository.save(appointment);
 
+        // If in-clinic, publish InClinicBookingEvent so payment-module creates the pending payment record
+        if (appointment.getConsultationType() == com.app.appointment.entity.ConsultationType.IN_CLINIC) {
+            try {
+                eventPublisher.publishEvent(new com.app.common.event.InClinicBookingEvent(
+                    this,
+                    savedAppointment.getId(),
+                    doctor.getConsultationFee() != null ? doctor.getConsultationFee() : java.math.BigDecimal.valueOf(500)
+                ));
+            } catch (Exception e) {
+                System.err.println("Failed to publish InClinicBookingEvent: " + e.getMessage());
+            }
+        }
+
         // Publish appointment booked notification for the Doctor
         try {
+            boolean isInClinic = appointment.getConsultationType() == com.app.appointment.entity.ConsultationType.IN_CLINIC;
             eventPublisher.publishEvent(new NotificationEvent(
                 this,
                 doctor.getUserId(),
-                "New Appointment Request",
-                String.format("You have a new appointment booking request from %s for %s at %s.", 
+                isInClinic ? "New In-Clinic Consultation Booked" : "New Appointment Request",
+                String.format("You have a new %s booking request from %s for %s at %s.", 
+                    isInClinic ? "in-clinic (pay at clinic)" : "online consultation",
                     patient.getFullName(), 
                     savedAppointment.getAppointmentDate().toString(), 
                     savedAppointment.getTimeSlot()),
-                NotificationType.APPOINTMENT_BOOKED,
+                isInClinic ? NotificationType.APPOINTMENT_CONFIRMED : NotificationType.APPOINTMENT_BOOKED,
                 savedAppointment.getId().toString()
             ));
         } catch (Exception e) {
@@ -317,6 +348,9 @@ public class AppointmentService {
         response.setCancelledBy(appointment.getCancelledBy());
         if (appointment.getRescheduledFrom() != null) {
             response.setRescheduledFromId(appointment.getRescheduledFrom().getId());
+        }
+        if (appointment.getConsultationType() != null) {
+            response.setConsultationType(appointment.getConsultationType().name());
         }
         return response;
     }

@@ -15,6 +15,8 @@ interface Doctor {
   rating?: number;
   profileImageUrl?: string;
   isAvailable?: boolean;
+  availableInClinic?: boolean;
+  availableVideo?: boolean;
 }
 
 const PatientDashboard: React.FC = () => {

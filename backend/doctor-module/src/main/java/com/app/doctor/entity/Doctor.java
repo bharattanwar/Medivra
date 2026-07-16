@@ -147,11 +147,33 @@ public class Doctor extends BaseEntity {
     @Column(name = "is_approved", nullable = false)
     private Boolean isApproved = false;
 
+    @Column(name = "available_in_clinic", nullable = false)
+    private Boolean availableInClinic = true;
+
+    @Column(name = "available_video", nullable = false)
+    private Boolean availableVideo = true;
+
     public Boolean isApproved() {
         return isApproved;
     }
 
     public void setApproved(Boolean approved) {
         isApproved = approved;
+    }
+
+    public Boolean getAvailableInClinic() {
+        return availableInClinic;
+    }
+
+    public void setAvailableInClinic(Boolean availableInClinic) {
+        this.availableInClinic = availableInClinic;
+    }
+
+    public Boolean getAvailableVideo() {
+        return availableVideo;
+    }
+
+    public void setAvailableVideo(Boolean availableVideo) {
+        this.availableVideo = availableVideo;
     }
 }

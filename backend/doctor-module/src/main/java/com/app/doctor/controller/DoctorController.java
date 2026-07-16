@@ -49,4 +49,19 @@ public class DoctorController {
         DoctorDTO doctor = doctorService.getDoctorById(id);
         return ResponseEntity.ok(ApiResponse.success(doctor, "Doctor retrieved successfully"));
     }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<DoctorDTO>> getDoctorByUserId(@PathVariable UUID userId) {
+        DoctorDTO doctor = doctorService.getDoctorByUserId(userId);
+        return ResponseEntity.ok(ApiResponse.success(doctor, "Doctor retrieved successfully"));
+    }
+
+    @PutMapping("/profile/availability-types")
+    public ResponseEntity<ApiResponse<DoctorDTO>> updateConsultationAvailability(
+            @RequestParam UUID userId,
+            @RequestParam boolean availableInClinic,
+            @RequestParam boolean availableVideo) {
+        DoctorDTO updated = doctorService.updateConsultationAvailability(userId, availableInClinic, availableVideo);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Consultation types availability updated successfully"));
+    }
 }

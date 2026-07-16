@@ -17,6 +17,7 @@ interface Appointment {
   cancellationReason?: string;
   cancelledBy?: string;
   rescheduledFromId?: string;
+  consultationType?: 'ONLINE' | 'IN_CLINIC';
 }
 
 const MyAppointments: React.FC = () => {
@@ -274,12 +275,14 @@ const MyAppointments: React.FC = () => {
                         >
                           💬 Chat
                         </button>
-                        <button
-                          onClick={() => navigate(`/consultation/${apt.id}`)}
-                          className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1"
-                        >
-                          📹 Join Call
-                        </button>
+                        {apt.consultationType !== 'IN_CLINIC' && (
+                          <button
+                            onClick={() => navigate(`/consultation/${apt.id}`)}
+                            className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1"
+                          >
+                            📹 Join Call
+                          </button>
+                        )}
                         {isCancelable(apt.appointmentDate) && (
                           <>
                             <button

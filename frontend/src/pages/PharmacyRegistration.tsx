@@ -72,7 +72,7 @@ const PharmacyRegistration: React.FC = () => {
 
   // lat/lng stored silently — never exposed as raw number inputs
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [coordSource, setCoordSource] = useState<'gps' | 'geocode' | null>(null);
+  const [coordSource, setCoordSource] = useState<'gps' | 'geocode' | 'manual' | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -172,36 +172,7 @@ const PharmacyRegistration: React.FC = () => {
     }
   };
 
-  // Shared "location confirmed" badge
-  const LocationBadge = () => (
-    <div className="flex flex-col gap-3 mt-3">
-      <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-2.5 rounded-xl">
-        <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-        <span>
-          {coordSource === 'gps' ? 'GPS location captured' : 'Address geocoded successfully'}
-          {' '}<span className="text-green-500 text-xs">— coordinates stored securely</span>
-        </span>
-        <button
-          type="button"
-          onClick={() => { setCoords(null); setCoordSource(null); }}
-          className="ml-auto text-xs text-green-600 hover:text-green-800 underline"
-        >
-          Change
-        </button>
-      </div>
-      {coords && (
-        <div className="w-full h-48 rounded-xl overflow-hidden border border-slate-200 shadow-sm mt-1">
-          <iframe
-            title="Pharmacy Location Map"
-            width="100%"
-            height="100%"
-            style={{ border: 0 }}
-            src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-          />
-        </div>
-      )}
-    </div>
-  );
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-purple-900 flex items-center justify-center p-4">
@@ -289,84 +260,145 @@ const PharmacyRegistration: React.FC = () => {
             <div className="border-t border-slate-100" />
 
             {/* Step 3 — Location */}
-            <div>
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1 flex items-center gap-2">
-                <span className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                Set Pharmacy Location
-              </h2>
-              <p className="text-xs text-slate-400 mb-4">
-                We store your coordinates to help patients measure distance. Choose either method below.
-              </p>
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <span className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                  Set Pharmacy Location
+                </h2>
+                <p className="text-xs text-slate-400">
+                  We store your coordinates to help patients measure distance. Use GPS, search an address, or type coordinates manually.
+                </p>
+              </div>
 
-              {coords ? (
-                <LocationBadge />
-              ) : (
-                <div className="space-y-3">
-                  {/* Option A — Geocode from address */}
-                  <div className="border border-slate-200 rounded-2xl p-4 space-y-3">
-                    <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-indigo-500" /> Locate by Address
-                    </p>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input
-                          type="text"
-                          value={geocodeQuery}
-                          onChange={e => { setGeocodeQuery(e.target.value); setGeocodeError(''); }}
-                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleGeocode())}
-                          placeholder="Type full address including city & country…"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleGeocode}
-                        disabled={geocodeLoading || !geocodeQuery.trim()}
-                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 shrink-0"
-                      >
-                        {geocodeLoading
-                          ? <Loader2 className="h-4 w-4 animate-spin" />
-                          : <Search className="h-4 w-4" />
-                        }
-                        Look up
-                      </button>
-                    </div>
-                    {geocodeError && (
-                      <p className="text-xs text-red-600 flex items-center gap-1.5">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {geocodeError}
-                      </p>
-                    )}
-                    <p className="text-xs text-slate-400">
-                      Tip: For best results include city, state and country — e.g. "12 MG Road, Bengaluru, Karnataka, India"
-                    </p>
+              {/* Option A — Geocode from address */}
+              <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-white">
+                <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-indigo-500" /> Locate by Address Search
+                </p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={geocodeQuery}
+                      onChange={e => { setGeocodeQuery(e.target.value); setGeocodeError(''); }}
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleGeocode())}
+                      placeholder="Type full address including city & country…"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleGeocode}
+                    disabled={geocodeLoading || !geocodeQuery.trim()}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
+                  >
+                    {geocodeLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Search className="h-4 w-4" />
+                    }
+                    Look up
+                  </button>
+                </div>
+                {geocodeError && (
+                  <p className="text-xs text-red-600 flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {geocodeError}
+                  </p>
+                )}
+                <p className="text-xs text-slate-400">
+                  Tip: For best results include city, state and country — e.g. "12 MG Road, Bengaluru, Karnataka, India"
+                </p>
+              </div>
 
-                  {/* Divider */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 border-t border-slate-200" />
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">or</span>
-                    <div className="flex-1 border-t border-slate-200" />
-                  </div>
-
-                  {/* Option B — GPS detect */}
+              {/* Option B — GPS detect & Manual coordinates */}
+              <div className="border border-slate-200 rounded-2xl p-4 space-y-4 bg-white">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    ⚙️ Coordinates & GPS Controls
+                  </span>
                   <button
                     type="button"
                     onClick={handleGeolocate}
                     disabled={geoLoading}
-                    className="w-full flex items-center justify-center gap-3 py-3 px-5 rounded-2xl border-2 border-indigo-200 text-indigo-700 font-semibold text-sm hover:bg-indigo-50 hover:border-indigo-400 transition-all disabled:opacity-60"
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-4 rounded-xl border-2 border-indigo-200 text-indigo-700 font-bold text-xs hover:bg-indigo-50 hover:border-indigo-400 transition-all disabled:opacity-60 cursor-pointer"
                   >
                     {geoLoading
-                      ? <><Loader2 className="h-5 w-5 animate-spin" /> Detecting GPS location…</>
-                      : <><Crosshair className="h-5 w-5" /> Use My Current GPS Location</>
+                      ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Detecting…</>
+                      : <><Crosshair className="h-3.5 w-3.5" /> Detect Current GPS</>
                     }
                   </button>
-                  {geoError && (
-                    <p className="text-xs text-red-600 flex items-center gap-1.5">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {geoError}
-                    </p>
-                  )}
                 </div>
+                {geoError && (
+                  <p className="text-xs text-red-600 flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {geoError}
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={coords ? coords.lat : ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCoords(prev => ({
+                          lat: isNaN(val) ? 0 : val,
+                          lng: prev ? prev.lng : 0,
+                        }));
+                        setCoordSource('manual');
+                        setError('');
+                      }}
+                      placeholder="e.g. 28.6139"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={coords ? coords.lng : ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCoords(prev => ({
+                          lat: prev ? prev.lat : 0,
+                          lng: isNaN(val) ? 0 : val,
+                        }));
+                        setCoordSource('manual');
+                        setError('');
+                      }}
+                      placeholder="e.g. 77.2090"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Map preview + status */}
+              {coords ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-2.5 rounded-xl">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                    <span>
+                      {coordSource === 'gps' ? 'GPS location captured' : coordSource === 'geocode' ? 'Address geocoded' : 'Coordinates set manually'}
+                      {' '}<span className="text-green-500 text-xs">({coords.lat.toFixed(5)}, {coords.lng.toFixed(5)})</span>
+                    </span>
+                  </div>
+                  <div className="w-full h-48 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                    <iframe
+                      title="Pharmacy Location Map"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-600 font-medium">⚠️ Please set coordinates using one of the methods above before registering.</p>
               )}
             </div>
 

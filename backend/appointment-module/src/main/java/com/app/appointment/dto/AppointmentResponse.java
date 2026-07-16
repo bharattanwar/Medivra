@@ -17,6 +17,7 @@ public class AppointmentResponse {
     private String cancellationReason;
     private UUID cancelledBy;
     private UUID rescheduledFromId;
+    private String consultationType;
 
     public UUID getId() {
         return id;
@@ -112,5 +113,13 @@ public class AppointmentResponse {
 
     public void setRescheduledFromId(UUID rescheduledFromId) {
         this.rescheduledFromId = rescheduledFromId;
+    }
+
+    public String getConsultationType() {
+        return consultationType;
+    }
+
+    public void setConsultationType(String consultationType) {
+        this.consultationType = consultationType;
     }
 }

@@ -19,6 +19,7 @@ interface Appointment {
   cancellationReason?: string;
   cancelledBy?: string;
   rescheduledFromId?: string;
+  consultationType?: 'ONLINE' | 'IN_CLINIC';
 }
 
 const DoctorAppointments: React.FC = () => {
@@ -200,12 +201,14 @@ const DoctorAppointments: React.FC = () => {
                         >
                           💬 Start Consultation
                         </button>
-                        <button 
-                          onClick={() => navigate(`/consultation/${apt.id}`)}
-                          className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
-                        >
-                          📹 Join Video Call
-                        </button>
+                        {apt.consultationType !== 'IN_CLINIC' && (
+                          <button 
+                            onClick={() => navigate(`/consultation/${apt.id}`)}
+                            className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                          >
+                            📹 Join Video Call
+                          </button>
+                        )}
                         <button 
                           onClick={() => setSelectedAppointment(apt)}
                           className="flex-1 lg:flex-initial h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"

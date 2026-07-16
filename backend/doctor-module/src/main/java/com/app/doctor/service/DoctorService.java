@@ -71,6 +71,8 @@ public class DoctorService {
         doctor.setRating(0.0);
         doctor.setAvailable(true);
         doctor.setApproved(false);
+        doctor.setAvailableInClinic(true);
+        doctor.setAvailableVideo(true);
 
         doctorRepository.save(doctor);
 
@@ -107,6 +109,25 @@ public class DoctorService {
         return convertToDTO(doctor);
     }
 
+    public DoctorDTO getDoctorByUserId(UUID userId) {
+        Doctor doctor = doctorRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Doctor not found"));
+        return convertToDTO(doctor);
+    }
+
+    @Transactional
+    public DoctorDTO updateConsultationAvailability(UUID userId, boolean availableInClinic, boolean availableVideo) {
+        if (!availableInClinic && !availableVideo) {
+            throw new RuntimeException("At least one consultation type must be enabled.");
+        }
+        Doctor doctor = doctorRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Doctor not found"));
+        doctor.setAvailableInClinic(availableInClinic);
+        doctor.setAvailableVideo(availableVideo);
+        doctorRepository.save(doctor);
+        return convertToDTO(doctor);
+    }
+
     private DoctorDTO convertToDTO(Doctor doctor) {
         User user = userRepository.findById(doctor.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found for doctor"));
@@ -122,7 +143,9 @@ public class DoctorService {
                 doctor.getCity(),
                 doctor.getRating(),
                 doctor.getProfileImageUrl(),
-                doctor.getAvailable()
+                doctor.getAvailable(),
+                doctor.getAvailableInClinic(),
+                doctor.getAvailableVideo()
         );
     }
 }

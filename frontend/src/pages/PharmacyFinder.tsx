@@ -85,6 +85,15 @@ type PrescriptionSource = 'select' | 'upload';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Geocode an address string using OSM Nominatim (free, no API key) ────────────
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const data = await res.json();
+  if (data.length === 0) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+}
+
 const PharmacyFinder: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('match');
@@ -97,6 +106,11 @@ const PharmacyFinder: React.FC = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
+
+  // Address search for Nearby tab
+  const [nearbyAddressQuery, setNearbyAddressQuery] = useState('');
+  const [nearbySearchLoading, setNearbySearchLoading] = useState(false);
+  const [nearbySearchError, setNearbySearchError] = useState('');
 
   // ── Smart Match Tab State ────────────────────────────────────────────────
   const [matchMode, setMatchMode] = useState<MatchMode>('prescription');
@@ -131,6 +145,11 @@ const PharmacyFinder: React.FC = () => {
   const [matchLocation, setMatchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeMapPharmacyId, setActiveMapPharmacyId] = useState<string | null>(null);
   const [matchGeoLoading, setMatchGeoLoading] = useState(false);
+
+  // Address search for Smart Match tab
+  const [matchAddressQuery, setMatchAddressQuery] = useState('');
+  const [matchSearchLoading, setMatchSearchLoading] = useState(false);
+  const [matchSearchError, setMatchSearchError] = useState('');
 
   // Checkout State
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -175,6 +194,48 @@ const PharmacyFinder: React.FC = () => {
       setGeoError
     );
   }, [requestLocation]);
+
+  // ── Geocode handlers ─────────────────────────────────────────────────────────
+
+  const handleNearbyGeocode = async () => {
+    const q = nearbyAddressQuery.trim();
+    if (!q) return;
+    setNearbySearchLoading(true);
+    setNearbySearchError('');
+    try {
+      const result = await geocodeAddress(q);
+      if (!result) {
+        setNearbySearchError('Address not found. Try a more specific query.');
+      } else {
+        setUserLocation(result);
+      }
+    } catch {
+      setNearbySearchError('Lookup failed. Check your connection.');
+    } finally {
+      setNearbySearchLoading(false);
+    }
+  };
+
+  const handleMatchGeocode = async () => {
+    const q = matchAddressQuery.trim();
+    if (!q) return;
+    setMatchSearchLoading(true);
+    setMatchSearchError('');
+    try {
+      const result = await geocodeAddress(q);
+      if (!result) {
+        setMatchSearchError('Address not found. Try a more specific query.');
+      } else {
+        setMatchLocation(result);
+        // Auto-populate checkout delivery address with the searched text
+        setDeliveryAddress(q);
+      }
+    } catch {
+      setMatchSearchError('Lookup failed. Check your connection.');
+    } finally {
+      setMatchSearchLoading(false);
+    }
+  };
 
   // Fetch nearby pharmacies when location changes
   useEffect(() => {
@@ -612,50 +673,116 @@ const PharmacyFinder: React.FC = () => {
         {activeTab === 'nearby' && (
           <div className="space-y-6">
             {/* Controls */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div className="flex items-center gap-3 flex-1">
-                <div className={`p-2 rounded-xl ${userLocation ? 'bg-green-50' : 'bg-slate-50'}`}>
-                  <Navigation className={`h-5 w-5 ${userLocation ? 'text-green-600' : 'text-slate-400'}`} />
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className={`p-2 rounded-xl ${userLocation ? 'bg-green-50' : 'bg-slate-50'}`}>
+                    <Navigation className={`h-5 w-5 ${userLocation ? 'text-green-600' : 'text-slate-400'}`} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm">Search Location</h3>
+                    <p className="text-xs text-slate-500">Find pharmacies near a specific location. Use GPS, search an address, or edit coordinates.</p>
+                  </div>
                 </div>
-                <div>
-                  {geoLoading ? (
-                    <p className="text-sm font-semibold text-slate-500 flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-indigo-500" /> Detecting your location…
-                    </p>
-                  ) : userLocation ? (
-                    <p className="text-sm font-semibold text-green-700">📍 Location detected — showing nearby pharmacies</p>
-                  ) : (
-                    <p className="text-sm font-semibold text-slate-600">Location not yet detected</p>
-                  )}
-                  {geoError && <p className="text-xs text-red-500 mt-0.5">{geoError}</p>}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500">Radius:</label>
-                  <select
-                    value={radius}
-                    onChange={e => setRadius(Number(e.target.value))}
-                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-white"
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-slate-500">Radius:</label>
+                    <select
+                      value={radius}
+                      onChange={e => setRadius(Number(e.target.value))}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-white"
+                    >
+                      {[5, 10, 20, 30, 50].map(r => (
+                        <option key={r} value={r}>{r} km</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => requestLocation(
+                      (lat, lng) => setUserLocation({ lat, lng }),
+                      setGeoLoading,
+                      setGeoError
+                    )}
+                    disabled={geoLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-xs font-semibold hover:bg-indigo-50 transition-colors disabled:opacity-60 cursor-pointer"
                   >
-                    {[5, 10, 20, 30, 50].map(r => (
-                      <option key={r} value={r}>{r} km</option>
-                    ))}
-                  </select>
+                    {geoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
+                    Detect GPS
+                  </button>
                 </div>
-                <button
-                  onClick={() => requestLocation(
-                    (lat, lng) => setUserLocation({ lat, lng }),
-                    setGeoLoading,
-                    setGeoError
-                  )}
-                  disabled={geoLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-xs font-semibold hover:bg-indigo-50 transition-colors disabled:opacity-60 cursor-pointer"
-                >
-                  {geoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
-                  Re-detect
-                </button>
               </div>
+
+              {geoError && <p className="text-xs text-red-500">{geoError}</p>}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                {/* Geocode lookup */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Lookup Address</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={nearbyAddressQuery}
+                        onChange={e => { setNearbyAddressQuery(e.target.value); setNearbySearchError(''); }}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleNearbyGeocode())}
+                        placeholder="Type address to search nearby..."
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleNearbyGeocode}
+                      disabled={nearbySearchLoading || !nearbyAddressQuery.trim()}
+                      className="flex items-center gap-1 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {nearbySearchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Search'}
+                    </button>
+                  </div>
+                  {nearbySearchError && (
+                    <p className="text-[11px] text-red-600">{nearbySearchError}</p>
+                  )}
+                </div>
+
+                {/* Edit coordinates */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={userLocation ? userLocation.lat : ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setUserLocation(prev => ({ lat: isNaN(val) ? 0 : val, lng: prev?.lng ?? 0 }));
+                      }}
+                      placeholder="Latitude"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={userLocation ? userLocation.lng : ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setUserLocation(prev => ({ lat: prev?.lat ?? 0, lng: isNaN(val) ? 0 : val }));
+                      }}
+                      placeholder="Longitude"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {userLocation && (
+                <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
+                  <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                  <span>Searching around: <strong>{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</strong></span>
+                </div>
+              )}
             </div>
 
             {/* Results */}
@@ -672,17 +799,17 @@ const PharmacyFinder: React.FC = () => {
             ) : !userLocation ? (
               <div className="text-center py-24">
                 <Navigation className="h-16 w-16 text-slate-200 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-slate-700 mb-2">Allow Location Access</h3>
+                <h3 className="text-lg font-bold text-slate-700 mb-2">Set Your Search Location</h3>
                 <p className="text-slate-400 text-sm max-w-sm mx-auto mb-6">
-                  We need your location to find pharmacies near you.
+                  Use the controls above to detect your GPS location, search an address, or enter coordinates manually.
                 </p>
                 <button
                   onClick={() => requestLocation((lat, lng) => setUserLocation({ lat, lng }), setGeoLoading, setGeoError)}
                   disabled={geoLoading}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
                 >
                   {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-                  Allow Location
+                  Quick: Detect GPS
                 </button>
               </div>
             ) : nearby.length === 0 ? (
@@ -780,30 +907,95 @@ const PharmacyFinder: React.FC = () => {
             <div className="lg:col-span-2 space-y-5">
               
               {/* Location configuration */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Delivery Location</p>
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery Location</p>
                   <button
+                    type="button"
                     onClick={() => requestLocation(
                       (lat, lng) => setMatchLocation({ lat, lng }),
                       setMatchGeoLoading,
                       () => {}
                     )}
                     disabled={matchGeoLoading}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                   >
                     {matchGeoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
-                    {matchLocation || userLocation ? 'Re-detect' : 'Detect Location'}
+                    Detect GPS
                   </button>
                 </div>
-                {matchGeoLoading ? (
-                  <p className="text-sm text-slate-500 flex items-center gap-1.5">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" /> Detecting…
-                  </p>
-                ) : (matchLocation || userLocation) ? (
-                  <p className="text-sm font-semibold text-green-700">📍 Location detected</p>
+
+                {/* Geocode lookup */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Lookup Delivery Address</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={matchAddressQuery}
+                        onChange={e => { setMatchAddressQuery(e.target.value); setMatchSearchError(''); }}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleMatchGeocode())}
+                        placeholder="Type delivery address to geocode..."
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleMatchGeocode}
+                      disabled={matchSearchLoading || !matchAddressQuery.trim()}
+                      className="flex items-center gap-1 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {matchSearchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Search'}
+                    </button>
+                  </div>
+                  {matchSearchError && (
+                    <p className="text-[11px] text-red-600">{matchSearchError}</p>
+                  )}
+                </div>
+
+                {/* Coordinate inputs */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={matchLocation ? matchLocation.lat : (userLocation ? userLocation.lat : '')}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const currentLng = matchLocation ? matchLocation.lng : (userLocation ? userLocation.lng : 0);
+                        setMatchLocation({ lat: isNaN(val) ? 0 : val, lng: currentLng });
+                      }}
+                      placeholder="Latitude"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={matchLocation ? matchLocation.lng : (userLocation ? userLocation.lng : '')}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const currentLat = matchLocation ? matchLocation.lat : (userLocation ? userLocation.lat : 0);
+                        setMatchLocation({ lat: currentLat, lng: isNaN(val) ? 0 : val });
+                      }}
+                      placeholder="Longitude"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Status indicator */}
+                {(matchLocation || userLocation) ? (
+                  <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
+                    <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                    <span>Coordinates active: <strong>{(matchLocation || userLocation)?.lat.toFixed(4)}, {(matchLocation || userLocation)?.lng.toFixed(4)}</strong></span>
+                  </div>
                 ) : (
-                  <p className="text-sm text-amber-600 font-medium">⚠ Location required for pharmacy optimization</p>
+                  <p className="text-xs text-amber-600 font-medium">⚠️ Location required for pharmacy optimization</p>
                 )}
               </div>
 
