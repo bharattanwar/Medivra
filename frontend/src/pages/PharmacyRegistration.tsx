@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   MapPin, Phone, Mail, Lock, User, Building2,
-  Crosshair, Loader2, ChevronRight, CheckCircle2, AlertCircle, Search
+  Crosshair, Loader2, ChevronRight, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import api from '../services/api';
 
