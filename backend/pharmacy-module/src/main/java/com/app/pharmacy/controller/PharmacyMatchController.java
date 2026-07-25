@@ -34,7 +34,7 @@ public class PharmacyMatchController {
     public ResponseEntity<ApiResponse<List<NearbyPharmacyResponse>>> findNearbyPharmacies(
             @RequestParam double lat,
             @RequestParam double lng,
-            @RequestParam(defaultValue = "20.0") double radiusKm) {
+            @RequestParam(defaultValue = "5.0") double radiusKm) {
         List<NearbyPharmacyResponse> result = pharmacyMatchService.findNearbyPharmacies(lat, lng, radiusKm);
         return ResponseEntity.ok(ApiResponse.success(result, "Nearby pharmacies retrieved"));
     }

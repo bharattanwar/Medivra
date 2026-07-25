@@ -14,7 +14,7 @@ public class PharmacyMatchRequest {
     @NotNull(message = "User longitude is required")
     private Double userLongitude;
 
-    private Double radiusKm = 20.0;
+    private Double radiusKm = 5.0;
 
     @NotEmpty(message = "At least one medicine is required")
     @Valid

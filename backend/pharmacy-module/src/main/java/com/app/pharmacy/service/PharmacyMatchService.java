@@ -91,7 +91,7 @@ public class PharmacyMatchService {
     public PharmacyMatchResult matchPharmacies(PharmacyMatchRequest request) {
         double userLat = request.getUserLatitude();
         double userLng = request.getUserLongitude();
-        double radiusKm = request.getRadiusKm() != null ? request.getRadiusKm() : 20.0;
+        double radiusKm = request.getRadiusKm() != null ? request.getRadiusKm() : 5.0;
 
         // Build a map of requested medicineId -> quantity needed
         Map<UUID, Integer> needed = new HashMap<>();
@@ -112,7 +112,7 @@ public class PharmacyMatchService {
             inventoryByPharmacy.put(pharmacy.getId(), inv);
         }
 
-        // Score each pharmacy by how many requested medicines it can supply
+        // Score each pharmacy by how many requested medicines it can supply (with sufficient quantity)
         record ScoredPharmacy(Pharmacy pharmacy, double distanceKm, double score,
                                List<PharmacyInventory> matchingInventory) {}
 
@@ -152,6 +152,8 @@ public class PharmacyMatchService {
         Set<UUID> remainingMedicineIds = new HashSet<>(needed.keySet());
         List<PharmacyAllocation> allocations = new ArrayList<>();
         BigDecimal grandTotal = BigDecimal.ZERO;
+        // Track which pharmacies have been used to avoid duplicates
+        Set<UUID> usedPharmacyIds = new HashSet<>();
 
         for (ScoredPharmacy sp : scored) {
             if (remainingMedicineIds.isEmpty()) break;
@@ -179,7 +181,76 @@ public class PharmacyMatchService {
                     round(sp.score()), items, subtotal));
 
             grandTotal = grandTotal.add(subtotal);
+            usedPharmacyIds.add(sp.pharmacy().getId());
             canFulfill.forEach(i -> remainingMedicineIds.remove(i.getMedicine().getId()));
+        }
+
+        // ── Strategy 3: Targeted Search for Remaining Medicines ──────────────
+        // If some medicines are still unsatisfied, search more broadly for each
+        // unsatisfied medicine by querying the inventory index directly.
+        // Expand search to 50km max to find any pharmacy stocking the medicine.
+        if (!remainingMedicineIds.isEmpty()) {
+            double expandedRadius = Math.max(radiusKm * 2, 50.0);
+
+            for (UUID medicineId : new ArrayList<>(remainingMedicineIds)) {
+                // Find all inventory entries for this medicine across all pharmacies
+                List<PharmacyInventory> allInventoryForMedicine =
+                        pharmacyInventoryRepository.findByMedicineId(medicineId);
+
+                // Filter to sufficient quantity, active pharmacy, within expanded radius,
+                // and not already used in allocations
+                Optional<PharmacyInventory> bestMatch = allInventoryForMedicine.stream()
+                        .filter(inv -> inv.getQuantity() >= needed.get(medicineId))
+                        .filter(inv -> Boolean.TRUE.equals(inv.getPharmacy().getActive()))
+                        .filter(inv -> !usedPharmacyIds.contains(inv.getPharmacy().getId())
+                                || true) // Allow same pharmacy if needed — will merge below
+                        .filter(inv -> {
+                            double dist = haversine(userLat, userLng,
+                                    inv.getPharmacy().getLatitude(),
+                                    inv.getPharmacy().getLongitude());
+                            return dist <= expandedRadius;
+                        })
+                        .min(Comparator.comparingDouble(inv ->
+                                haversine(userLat, userLng,
+                                        inv.getPharmacy().getLatitude(),
+                                        inv.getPharmacy().getLongitude())));
+
+                if (bestMatch.isPresent()) {
+                    PharmacyInventory inv = bestMatch.get();
+                    Pharmacy pharmacy = inv.getPharmacy();
+                    double dist = haversine(userLat, userLng,
+                            pharmacy.getLatitude(), pharmacy.getLongitude());
+
+                    int qty = needed.get(medicineId);
+                    BigDecimal lineTotal = inv.getPrice().multiply(BigDecimal.valueOf(qty));
+                    AllocatedItem newItem = new AllocatedItem(
+                            medicineId, inv.getMedicine().getName(),
+                            qty, inv.getPrice(), lineTotal);
+
+                    // Check if this pharmacy already has an allocation — merge items
+                    Optional<PharmacyAllocation> existingAlloc = allocations.stream()
+                            .filter(a -> a.getPharmacyId().equals(pharmacy.getId()))
+                            .findFirst();
+
+                    if (existingAlloc.isPresent()) {
+                        PharmacyAllocation existing = existingAlloc.get();
+                        List<AllocatedItem> updatedItems = new ArrayList<>(existing.getItems());
+                        updatedItems.add(newItem);
+                        existing.setItems(updatedItems);
+                        existing.setSubtotal(existing.getSubtotal().add(lineTotal));
+                    } else {
+                        allocations.add(new PharmacyAllocation(
+                                pharmacy.getId(), pharmacy.getName(),
+                                pharmacy.getAddress(), round(dist),
+                                round(computeScore(1, dist)),
+                                new ArrayList<>(List.of(newItem)), lineTotal));
+                        usedPharmacyIds.add(pharmacy.getId());
+                    }
+
+                    grandTotal = grandTotal.add(lineTotal);
+                    remainingMedicineIds.remove(medicineId);
+                }
+            }
         }
 
         boolean allSatisfied = remainingMedicineIds.isEmpty();

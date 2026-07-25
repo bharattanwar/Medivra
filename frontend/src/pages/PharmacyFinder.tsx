@@ -94,7 +94,7 @@ const PharmacyFinder: React.FC = () => {
   const [nearby, setNearby] = useState<NearbyPharmacy[]>([]);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState('');
-  const [radius, setRadius] = useState(20);
+  const [radius, setRadius] = useState(5);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
@@ -374,7 +374,7 @@ const PharmacyFinder: React.FC = () => {
       const matchRes = await api.post('/pharmacies/match', {
         userLatitude: loc.lat,
         userLongitude: loc.lng,
-        radiusKm: 30,
+        radiusKm: 50,
         medicines: finalBasket
       });
 
@@ -400,7 +400,7 @@ const PharmacyFinder: React.FC = () => {
       const res = await api.post('/pharmacies/match', {
         userLatitude: loc.lat,
         userLongitude: loc.lng,
-        radiusKm: 30,
+        radiusKm: 50,
         medicines: basket.map(b => ({ medicineId: b.medicineId, quantity: b.quantity })),
       });
       if (res.data.success) setMatchResult(res.data.data);
@@ -544,9 +544,29 @@ const PharmacyFinder: React.FC = () => {
     }
   };
 
-  // Step 1 — proceed to payment method selection
+  // Step 1 — detect GPS and proceed to payment method selection
   const handleCheckout = () => {
-    if (!matchResult || !deliveryAddress.trim() || !patientId) return;
+    if (!matchResult || !patientId) return;
+    const loc = matchLocation || userLocation;
+    if (!loc) {
+      // Trigger GPS detection first
+      requestLocation(
+        (lat, lng) => {
+          const gpsAddr = `GPS Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          setDeliveryAddress(gpsAddr);
+          setMatchLocation({ lat, lng });
+          setPaymentMethod(null);
+          setPaymentError('');
+          setPaymentStep('method');
+        },
+        setMatchGeoLoading,
+        () => setPaymentError('GPS access denied. Please allow location access to proceed.')
+      );
+      return;
+    }
+    // GPS already available
+    const gpsAddr = `GPS Location: ${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
+    setDeliveryAddress(gpsAddr);
     setPaymentMethod(null);
     setPaymentError('');
     setPaymentStep('method');
@@ -556,8 +576,8 @@ const PharmacyFinder: React.FC = () => {
   const tabClass = (t: Tab) =>
     `flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
       activeTab === t
-        ? 'bg-white text-indigo-750 shadow-md'
-        : 'text-slate-500 hover:text-slate-700'
+        ? 'bg-white text-blue-700 shadow-md'
+        : 'text-white/70 hover:text-white hover:bg-white/10'
     }`;
 
   const modeBtnClass = (m: MatchMode) =>
@@ -577,18 +597,18 @@ const PharmacyFinder: React.FC = () => {
   return (
     <div className="min-h-full bg-slate-50">
       {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-1.5 rounded-full text-sm font-semibold mb-4">
             <Pill className="h-4 w-4" /> Medicine Ecosystem
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">Order Prescription Medicines</h1>
-          <p className="text-indigo-200 text-base max-w-xl mx-auto">
+          <p className="text-blue-100 text-base max-w-xl mx-auto">
             Upload your doctor's prescription or search for medicines directly. We'll find and optimize fulfillment routes across nearby pharmacies.
           </p>
 
           {/* Tab Toggle */}
-          <div className="mt-8 inline-flex bg-indigo-800/60 backdrop-blur rounded-2xl p-1.5 gap-1">
+          <div className="mt-8 inline-flex bg-blue-800/60 backdrop-blur rounded-2xl p-1.5 gap-1">
             <button
               id="tab-nearby"
               onClick={() => setActiveTab('nearby')}
@@ -630,7 +650,7 @@ const PharmacyFinder: React.FC = () => {
                     <select
                       value={radius}
                       onChange={e => setRadius(Number(e.target.value))}
-                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 bg-white"
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 bg-white"
                     >
                       {[5, 10, 20, 30, 50].map(r => (
                         <option key={r} value={r}>{r} km</option>
@@ -644,7 +664,7 @@ const PharmacyFinder: React.FC = () => {
                       setGeoError
                     )}
                     disabled={geoLoading}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all disabled:opacity-60 cursor-pointer shadow-sm"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all disabled:opacity-60 cursor-pointer shadow-sm"
                   >
                     {geoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
                     Detect GPS Location
@@ -665,7 +685,7 @@ const PharmacyFinder: React.FC = () => {
             {/* Results */}
             {nearbyLoading ? (
               <div className="flex flex-col items-center py-24 gap-3">
-                <div className="h-16 w-16 border-4 border-indigo-100 rounded-full animate-spin border-t-indigo-600" />
+                <div className="h-16 w-16 border-4 border-blue-100 rounded-full animate-spin border-t-blue-600" />
                 <p className="text-slate-500 text-sm">Finding pharmacies near you…</p>
               </div>
             ) : nearbyError ? (
@@ -683,7 +703,7 @@ const PharmacyFinder: React.FC = () => {
                 <button
                   onClick={() => requestLocation((lat, lng) => setUserLocation({ lat, lng }), setGeoLoading, setGeoError)}
                   disabled={geoLoading}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer"
                 >
                   {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
                   Detect GPS Location
@@ -704,17 +724,17 @@ const PharmacyFinder: React.FC = () => {
                   {nearby.map((pharm, idx) => (
                     <div
                       key={pharm.id}
-                      className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all overflow-hidden group"
+                      className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all overflow-hidden group"
                     >
-                      <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-500" />
+                      <div className="h-1.5 bg-gradient-to-r from-blue-500 to-sky-500" />
                       <div className="p-5">
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="w-6 h-6 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full flex items-center justify-center">
+                              <span className="w-6 h-6 bg-blue-100 text-blue-700 text-xs font-bold rounded-full flex items-center justify-center">
                                 {idx + 1}
                               </span>
-                              <h3 className="font-bold text-slate-900 text-base group-hover:text-indigo-700 transition-colors">
+                              <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-700 transition-colors">
                                 {pharm.name}
                               </h3>
                             </div>
@@ -723,14 +743,14 @@ const PharmacyFinder: React.FC = () => {
                             </p>
                           </div>
                           <div className="text-right shrink-0">
-                            <span className="text-lg font-bold text-indigo-600">{pharm.distanceKm}</span>
+                            <span className="text-lg font-bold text-blue-600">{pharm.distanceKm}</span>
                             <span className="text-xs text-slate-400"> km</span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-3 mt-4">
                           <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg">
-                            <Package className="h-3.5 w-3.5 text-indigo-400" />
+                            <Package className="h-3.5 w-3.5 text-blue-400" />
                             {pharm.inventoryCount} medicines
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg">
@@ -743,7 +763,7 @@ const PharmacyFinder: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === pharm.id ? null : pharm.id)}
-                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 py-2 rounded-xl transition-colors border border-indigo-100 cursor-pointer"
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 py-2 rounded-xl transition-colors border border-blue-100 cursor-pointer"
                           >
                             <MapPin className="h-3.5 w-3.5" /> {activeMapPharmacyId === pharm.id ? 'Hide Map' : 'View Map'}
                           </button>
@@ -798,7 +818,7 @@ const PharmacyFinder: React.FC = () => {
                       () => {}
                     )}
                     disabled={matchGeoLoading}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs hover:bg-indigo-100/50 transition-all disabled:opacity-60 cursor-pointer shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold text-xs hover:bg-blue-100/50 transition-all disabled:opacity-60 cursor-pointer shadow-sm"
                   >
                     {matchGeoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
                     Detect GPS
@@ -859,11 +879,11 @@ const PharmacyFinder: React.FC = () => {
                   {prescriptionSource === 'select' && (
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                       <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                        <CheckCircle2 className="h-4 w-4 text-indigo-600" /> Select Previous Prescription
+                        <CheckCircle2 className="h-4 w-4 text-blue-600" /> Select Previous Prescription
                       </h3>
                       {prescLoading ? (
                         <div className="flex justify-center py-6">
-                          <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                         </div>
                       ) : prescriptions.length === 0 ? (
                         <p className="text-xs text-slate-400 text-center py-4">
@@ -875,7 +895,7 @@ const PharmacyFinder: React.FC = () => {
                           <select
                             value={selectedPrescId}
                             onChange={e => handlePrescriptionSelect(e.target.value)}
-                            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                           >
                             <option value="">-- Choose a prescription --</option>
                             {prescriptions.map(p => (
@@ -893,7 +913,7 @@ const PharmacyFinder: React.FC = () => {
                   {prescriptionSource === 'upload' && (
                     <form onSubmit={handleExternalUpload} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                       <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                        <Upload className="h-4 w-4 text-indigo-600" /> Upload PDF / Image
+                        <Upload className="h-4 w-4 text-blue-600" /> Upload PDF / Image
                       </h3>
                       
                       <div className="space-y-1">
@@ -902,7 +922,7 @@ const PharmacyFinder: React.FC = () => {
                           type="file"
                           accept=".pdf,image/*"
                           onChange={e => setUploadFile(e.target.files?.[0] || null)}
-                          className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                          className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                           required
                         />
                       </div>
@@ -914,20 +934,20 @@ const PharmacyFinder: React.FC = () => {
                           value={uploadNotes}
                           onChange={e => setUploadNotes(e.target.value)}
                           placeholder="e.g. For allergy, 2 tablets daily..."
-                          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                       </div>
 
                       {uploadLoading ? (
-                        <div className="bg-indigo-50 rounded-xl p-3 flex items-center gap-3">
-                          <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                          <span className="text-xs font-bold text-indigo-700 animate-pulse">{uploadProgressMsg}</span>
+                        <div className="bg-blue-50 rounded-xl p-3 flex items-center gap-3">
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                          <span className="text-xs font-bold text-blue-700 animate-pulse">{uploadProgressMsg}</span>
                         </div>
                       ) : (
                         <button
                           type="submit"
                           disabled={!uploadFile}
-                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors"
+                          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors"
                         >
                           Upload & Extract Medicines
                         </button>
@@ -941,19 +961,19 @@ const PharmacyFinder: React.FC = () => {
               {matchMode === 'manual' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <Search className="h-4 w-4 text-indigo-500" /> Add Medicines
+                    <Search className="h-4 w-4 text-blue-500" /> Add Medicines
                   </h3>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     {suggestLoading && (
-                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-400 animate-spin" />
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400 animate-spin" />
                     )}
                     <input
                       type="text"
                       value={query}
                       onChange={e => setQuery(e.target.value)}
                       placeholder="Search medicine name…"
-                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                     {suggestions.length > 0 && (
                       <div className="absolute z-25 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
@@ -962,7 +982,7 @@ const PharmacyFinder: React.FC = () => {
                             key={m.id}
                             type="button"
                             onClick={() => addToBasket(m)}
-                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-b-0 transition-colors"
                           >
                             <p className="text-sm font-semibold text-slate-800">{m.name}</p>
                             <p className="text-xs text-slate-400">{m.manufacturer} {m.strength && `· ${m.strength}`}</p>
@@ -1014,7 +1034,7 @@ const PharmacyFinder: React.FC = () => {
                           type="button"
                           onClick={handleMatch}
                           disabled={matchLoading}
-                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer"
+                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer"
                         >
                           Find Best Match
                         </button>
@@ -1028,13 +1048,13 @@ const PharmacyFinder: React.FC = () => {
               {matchMode === 'prescription' && (
                 verifying ? (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center text-slate-500 text-xs font-semibold flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> Scanning prescription items...
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> Scanning prescription items...
                   </div>
                 ) : identifiedItems.length > 0 ? (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-scale-in">
                     <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
                       <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                        <Sparkles className="h-4 w-4 text-indigo-600" /> Verify Prescription Medicines
+                        <Sparkles className="h-4 w-4 text-blue-600" /> Verify Prescription Medicines
                       </h3>
                     </div>
 
@@ -1095,7 +1115,7 @@ const PharmacyFinder: React.FC = () => {
                         type="button"
                         onClick={handleResolveAndMatch}
                         disabled={matchLoading}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2.5 rounded-xl font-bold text-xs shadow cursor-pointer hover:shadow-md transition-all"
+                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-sky-600 text-white py-2.5 rounded-xl font-bold text-xs shadow cursor-pointer hover:shadow-md transition-all"
                       >
                         {matchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                         Optimize & Find Pharmacies
@@ -1111,8 +1131,8 @@ const PharmacyFinder: React.FC = () => {
               {matchLoading && (
                 <div className="flex flex-col items-center py-24 bg-white rounded-2xl border border-slate-200 shadow-sm gap-4">
                   <div className="relative">
-                    <div className="h-16 w-16 rounded-full border-4 border-purple-100 border-t-purple-600 animate-spin" />
-                    <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-purple-600 animate-pulse" />
+                    <div className="h-16 w-16 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
+                    <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-blue-600 animate-pulse" />
                   </div>
                   <p className="text-slate-500 text-sm font-medium">Analysing pharmacy inventories near you…</p>
                 </div>
@@ -1152,10 +1172,10 @@ const PharmacyFinder: React.FC = () => {
                   {matchResult.allocations.map((alloc, idx) => (
                     <div key={alloc.pharmacyId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                       {/* Card Header */}
-                      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-5 py-4 border-b border-indigo-100">
+                      <div className="bg-gradient-to-r from-blue-50 to-sky-50 px-5 py-4 border-b border-blue-100">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <span className="w-8 h-8 bg-indigo-600 text-white text-sm font-bold rounded-full flex items-center justify-center">
+                            <span className="w-8 h-8 bg-blue-600 text-white text-sm font-bold rounded-full flex items-center justify-center">
                               {idx + 1}
                             </span>
                             <div>
@@ -1169,13 +1189,13 @@ const PharmacyFinder: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === alloc.pharmacyId ? null : alloc.pharmacyId)}
-                              className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white px-2.5 py-1.5 rounded-lg border border-indigo-100 cursor-pointer animate-fade-in"
+                              className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 cursor-pointer animate-fade-in"
                             >
                               <MapPin className="h-3.5 w-3.5" /> {activeMapPharmacyId === alloc.pharmacyId ? 'Hide Map' : 'Map'}
                             </button>
                             <div className="text-right">
                               <p className="text-xs text-slate-400">Distance</p>
-                              <p className="font-bold text-indigo-600">{alloc.distanceKm} km</p>
+                              <p className="font-bold text-blue-600">{alloc.distanceKm} km</p>
                             </div>
                           </div>
                         </div>
@@ -1210,7 +1230,7 @@ const PharmacyFinder: React.FC = () => {
                       {/* Subtotal */}
                       <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                         <p className="text-sm font-semibold text-slate-500">Subtotal</p>
-                        <p className="font-bold text-lg text-indigo-700">₹{Number(alloc.subtotal).toFixed(2)}</p>
+                        <p className="font-bold text-lg text-blue-700">₹{Number(alloc.subtotal).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
@@ -1218,33 +1238,42 @@ const PharmacyFinder: React.FC = () => {
                   {/* Checkout Form */}
                   <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                      <ShoppingCart className="h-4 w-4 text-indigo-600" /> Checkout
+                      <ShoppingCart className="h-4 w-4 text-blue-600" /> Checkout
                       <span className="ml-auto text-xs font-normal text-slate-400">
                         {paymentStep === 'address' ? 'Step 1 of 2 — Delivery' : 'Step 2 of 2 — Payment'}
                       </span>
                     </h3>
 
-                    {/* Step 1: Delivery Address */}
+                    {/* Step 1: Detect GPS for Delivery */}
                     {(paymentStep === 'address') && (
                       <>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-semibold text-slate-500">Delivery Address</label>
-                          <input
-                            type="text"
-                            value={deliveryAddress}
-                            onChange={e => setDeliveryAddress(e.target.value)}
-                            placeholder="Enter your complete home/office delivery address..."
-                            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                            required
-                          />
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-2 rounded-xl ${(matchLocation || userLocation) ? 'bg-green-50' : 'bg-slate-50'}`}>
+                              <Navigation className={`h-4 w-4 ${(matchLocation || userLocation) ? 'text-green-600' : 'text-slate-400'}`} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">Delivery via GPS Location</p>
+                              <p className="text-[10px] text-slate-400">We'll use your GPS coordinates for delivery routing</p>
+                            </div>
+                          </div>
+                          {(matchLocation || userLocation) ? (
+                            <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
+                              <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                              <span>📡 GPS active — {(matchLocation || userLocation)!.lat.toFixed(4)}, {(matchLocation || userLocation)!.lng.toFixed(4)}</span>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-amber-600 font-medium">⚠️ GPS location required for delivery</p>
+                          )}
                         </div>
                         <button
                           type="button"
                           onClick={handleCheckout}
-                          disabled={!deliveryAddress.trim()}
-                          className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                          disabled={matchGeoLoading}
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                         >
-                          <CreditCard className="h-4 w-4" /> Continue to Payment
+                          {matchGeoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                          {(matchLocation || userLocation) ? 'Continue to Payment' : 'Detect GPS & Continue'}
                         </button>
                       </>
                     )}
@@ -1252,19 +1281,22 @@ const PharmacyFinder: React.FC = () => {
                     {/* Step 2: Payment Method Selection */}
                     {(paymentStep === 'method' || paymentStep === 'processing') && (
                       <>
-                        {/* Delivery address summary */}
-                        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
-                          <div>
-                            <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Delivering to</p>
-                            <p className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{deliveryAddress}</p>
+                        {/* Delivery location summary */}
+                        <div className="flex items-center justify-between bg-green-50/50 border border-green-200 rounded-xl px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <Navigation className="h-4 w-4 text-green-600" />
+                            <div>
+                              <p className="text-[11px] text-green-600 font-semibold uppercase tracking-wide">Delivering to GPS Location</p>
+                              <p className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{deliveryAddress}</p>
+                            </div>
                           </div>
                           {paymentStep === 'method' && (
                             <button
                               type="button"
                               onClick={() => setPaymentStep('address')}
-                              className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
+                              className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
                             >
-                              Change
+                              Re-detect
                             </button>
                           )}
                         </div>
@@ -1279,15 +1311,15 @@ const PharmacyFinder: React.FC = () => {
                               onClick={() => setPaymentMethod('online')}
                               className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                                 paymentMethod === 'online'
-                                  ? 'border-indigo-600 bg-indigo-50 shadow-md shadow-indigo-100'
-                                  : 'border-slate-200 hover:border-indigo-300 bg-white'
+                                  ? 'border-blue-600 bg-blue-50 shadow-md shadow-blue-100'
+                                  : 'border-slate-200 hover:border-blue-300 bg-white'
                               } disabled:opacity-60 disabled:cursor-not-allowed`}
                             >
                               {paymentMethod === 'online' && (
-                                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-indigo-600" />
+                                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-blue-600" />
                               )}
                               <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                                <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-sky-600 rounded-xl flex items-center justify-center">
                                   <Smartphone className="h-5 w-5 text-white" />
                                 </div>
                                 <div>
@@ -1338,7 +1370,7 @@ const PharmacyFinder: React.FC = () => {
                           </div>
                         ) : paymentStep === 'processing' ? (
                           <div className="flex flex-col items-center py-6 gap-3">
-                            <div className="h-12 w-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
+                            <div className="h-12 w-12 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
                             <p className="text-sm font-semibold text-slate-600">
                               {paymentMethod === 'cod' ? 'Placing your order…' : 'Connecting to payment gateway…'}
                             </p>
@@ -1351,7 +1383,7 @@ const PharmacyFinder: React.FC = () => {
                             className={`w-full py-3 font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 ${
                               paymentMethod === 'cod'
                                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
-                                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white'
+                                : 'bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-800 text-white'
                             }`}
                           >
                             {paymentMethod === 'cod' ? (
@@ -1371,7 +1403,7 @@ const PharmacyFinder: React.FC = () => {
 
               {!matchResult && !matchLoading && (
                 <div className="bg-white rounded-2xl border border-dashed border-slate-300 text-center py-24 px-8">
-                  <Sparkles className="h-14 w-14 text-indigo-300 mx-auto mb-4 animate-pulse" />
+                  <Sparkles className="h-14 w-14 text-blue-300 mx-auto mb-4 animate-pulse" />
                   <h3 className="text-lg font-bold text-slate-700 mb-2">Automated Prescription Fulfillment</h3>
                   <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed">
                     Select a previous consult prescription or upload an external prescription sheet. Our engine will verify the medicines and map the cheapest and fastest multi-pharmacy deliveries.
