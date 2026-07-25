@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   MapPin, Phone, Package, Pill, Loader2, AlertCircle, Search,
   Navigation, Plus, Minus, CheckCircle2, ShoppingCart,
-  X, Sparkles, FileText, Upload, CreditCard, Truck, Smartphone
+  X, Sparkles, FileText, Upload, Truck, Smartphone
 } from 'lucide-react';
 import api from '../services/api';
 import { openRazorpayCheckout } from '../services/razorpay';
