@@ -1,11 +1,10 @@
 import React from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useWebSocket } from '../context/WebSocketContext';
 import NotificationBell from './NotificationBell';
 import { X, Calendar, CreditCard, FileText, Sparkles } from 'lucide-react';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
-  const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
@@ -19,7 +18,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
     localStorage.removeItem('userId');
-    navigate('/login');
+    window.location.replace('/login');
   };
 
   const navLinkClass = (path: string) =>
@@ -95,16 +94,19 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   ) : isPatient ? (
                     <>
                       <Link to="/patient/dashboard" className={navLinkClass('/patient/dashboard')}>
-                        Find Doctors
-                      </Link>
-                      <Link to="/patient/pharmacy" className={navLinkClass('/patient/pharmacy')}>
-                        Pharmacy
-                      </Link>
-                      <Link to="/patient/orders" className={navLinkClass('/patient/orders')}>
-                        Medicine Orders
+                        Dashboard
                       </Link>
                       <Link to="/patient/appointments" className={navLinkClass('/patient/appointments')}>
-                        Appointments
+                        Appointments History
+                      </Link>
+                      <Link to="/patient/ai/reports" className={navLinkClass('/patient/ai/reports')}>
+                        Reports Result
+                      </Link>
+                      <Link to="/patient/ai/booking" className={navLinkClass('/patient/ai/booking')}>
+                        AI Booking
+                      </Link>
+                      <Link to="/patient/pharmacy" className={navLinkClass('/patient/pharmacy')}>
+                        Order Medicines
                       </Link>
                       <Link to="/patient/payments" className={navLinkClass('/patient/payments')}>
                         Payments

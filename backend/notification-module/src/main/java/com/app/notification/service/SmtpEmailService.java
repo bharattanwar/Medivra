@@ -1,12 +1,18 @@
 package com.app.notification.service;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 @Service
 public class SmtpEmailService implements EmailService {
+
+    private static final Logger log = LoggerFactory.getLogger(SmtpEmailService.class);
 
     private final JavaMailSender mailSender;
 
@@ -20,20 +26,32 @@ public class SmtpEmailService implements EmailService {
     @Override
     public void sendEmail(String to, String subject, String content) {
         if (senderEmail == null || senderEmail.isBlank()) {
-            System.err.println("[Email] SPRING_MAIL_USERNAME is not set — skipping email to: " + to);
+            log.error("[Email] SPRING_MAIL_USERNAME is not set in environment — cannot send email to: {}", to);
             return;
         }
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(content);
-            // Gmail SMTP requires From == the authenticated account; any other address is rejected
-            message.setFrom(senderEmail);
-            mailSender.send(message);
-            System.out.println("[Email] Sent to: " + to + " | Subject: " + subject);
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+            helper.setFrom(senderEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+
+            // Build HTML body from plain text content by wrapping in preformatted style
+            String htmlContent = "<html><body style=\"font-family: Arial, sans-serif; line-height: 1.6;\">"
+                    + "<pre style=\"font-family: inherit; white-space: pre-wrap;\">" + content + "</pre>"
+                    + "</body></html>";
+
+            helper.setText(content, false); // plain text fallback
+            helper.setText(htmlContent, true); // HTML version
+
+            mailSender.send(mimeMessage);
+            log.info("[Email] Successfully sent to: {} | Subject: {}", to, subject);
+
+        } catch (MessagingException e) {
+            log.error("[Email] MessagingException — failed to send to {}: {}", to, e.getMessage(), e);
         } catch (Exception e) {
-            System.err.println("[Email] Failed to send to " + to + ": " + e.getMessage());
+            log.error("[Email] Unexpected error sending to {}: {}", to, e.getMessage(), e);
         }
     }
 }

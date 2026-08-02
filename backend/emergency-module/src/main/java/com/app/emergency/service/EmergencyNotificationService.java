@@ -53,13 +53,20 @@ public class EmergencyNotificationService {
         String body = buildEmergencyEmailBody(patientName, emergency, mapsLink);
 
         for (EmergencyContact contact : contacts) {
+            // Simulated SMS Delivery
+            if (contact.getPhone() != null && !contact.getPhone().isBlank()) {
+                log.info("[MOCK SMS] Sent to phone {}: EMERGENCY ALERT for {}", contact.getPhone(), patientName);
+            }
+
             if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
                 try {
                     emailService.sendEmail(contact.getEmail(), subject, body);
-                    log.info("Notified emergency contact {} for emergency {}", contact.getEmail(), emergency.getId());
+                    log.info("Notified emergency contact {} via email for emergency {}", contact.getEmail(), emergency.getId());
                 } catch (Exception e) {
                     log.error("Failed to notify contact {} for emergency {}", contact.getEmail(), emergency.getId(), e);
                 }
+            } else {
+                log.warn("Contact {} does not have an email address configured. Skipping email.", contact.getName());
             }
         }
     }
@@ -83,9 +90,15 @@ public class EmergencyNotificationService {
                 "Medivra Emergency Team";
 
         for (EmergencyContact contact : contacts) {
+            // Simulated SMS Delivery
+            if (contact.getPhone() != null && !contact.getPhone().isBlank()) {
+                log.info("[MOCK SMS] Sent to phone {}: URGENT ESCALATION for {} - Please call 112!", contact.getPhone(), patientName);
+            }
+
             if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
                 try {
                     emailService.sendEmail(contact.getEmail(), subject, body);
+                    log.info("Escalation email sent to {}", contact.getEmail());
                 } catch (Exception e) {
                     log.error("Failed to send escalation to {}", contact.getEmail(), e);
                 }

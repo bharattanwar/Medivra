@@ -872,148 +872,167 @@ const PharmacyDashboard: React.FC = () => {
                   Your pharmacy has no pending customer delivery requests right now.
                 </p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {orders.map(orderItem => (
-                  <div key={orderItem.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all">
-                    
-                    {/* Item header */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-100">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg">
-                            ORDER ITEM ID: {orderItem.id.slice(0, 8).toUpperCase()}
-                          </span>
-                          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${getItemStatusClass(orderItem.status)}`}>
-                            {orderItem.status}
-                          </span>
-                          {orderItem.paymentMethod === 'cash' && (
-                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${orderItem.paymentStatus === 'PAID' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
-                              COD: {orderItem.paymentStatus === 'PAID' ? 'PAID' : 'TO BE PAID'}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1.5">
-                          Delivery Route Time Limit: <strong className="text-orange-700">{orderItem.deliveryEstimate}</strong>
-                        </p>
-                      </div>
-                      
-                      {/* Price and qty */}
-                      <div className="text-right">
-                        <span className="text-xs text-slate-400 font-medium">Earnings</span>
-                        <p className="font-extrabold text-slate-900 text-lg">₹{Number(orderItem.price * orderItem.quantity).toFixed(2)}</p>
-                      </div>
-                    </div>
+            ) : (() => {
+              const groupedOrders = Object.values(orders.reduce((acc, item) => {
+                if (!acc[item.orderId]) acc[item.orderId] = [];
+                acc[item.orderId].push(item);
+                return acc;
+              }, {} as Record<string, typeof orders>));
 
-                    {/* Content Details */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs text-slate-600">
-                      {/* Column 1: Medication Detail */}
-                      <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                        <p className="font-bold text-slate-800 mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full" /> 📦 Medication Detail
-                        </p>
-                        <p>Medicine Name: <strong className="text-slate-900">{orderItem.medicineName}</strong></p>
-                        <p>Total Quantity: <strong className="text-slate-900">{orderItem.quantity} unit(s)</strong></p>
-                        <p>Unit Price: <strong className="text-slate-900">₹{Number(orderItem.price).toFixed(2)}</strong></p>
-                      </div>
-
-                      {/* Column 2: Delivery Details */}
-                      <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
-                        <div>
-                          <p className="font-bold text-slate-800 mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" /> 📍 Delivery Address
-                          </p>
-                          <p className="text-slate-900 font-semibold leading-relaxed">
-                            {orderItem.deliveryAddress || 'No address provided'}
-                          </p>
-                        </div>
-                        {orderItem.orderDate && (
-                          <div className="pt-2 border-t border-slate-200 mt-2 text-[11px] text-slate-500">
-                            Placed: <strong>{new Date(orderItem.orderDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Column 3: Shipment Action */}
-                      <div className="flex flex-col justify-center space-y-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                        <p className="font-bold text-slate-800 text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" /> ⚙ Shipment Action
-                        </p>
-                        <div className="flex flex-col gap-2">
-                          {orderItem.status === 'PENDING' && (
-                            <button
-                              onClick={() => handleUpdateStatus(orderItem.id, 'PREPARING')}
-                              className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-100 flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                            >
-                              Accept & Prepare <Clock className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {orderItem.status === 'PREPARING' && (
-                            <button
-                              onClick={() => handleUpdateStatus(orderItem.id, 'SHIPPED')}
-                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                            >
-                              Dispatch to Delivery Agent <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {orderItem.status === 'SHIPPED' && (
-                            <button
-                              onClick={() => handleUpdateStatus(orderItem.id, 'DELIVERED')}
-                              className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                            >
-                              Mark Delivered ✓
-                            </button>
-                          )}
-                          {orderItem.status === 'DELIVERED' && (
-                            <div className="flex flex-col gap-2 w-full">
-                              <div className="bg-green-50 text-green-700 border border-green-200 text-center py-2.5 rounded-xl font-bold flex items-center justify-center gap-1">
-                                ✓ Completed Fulfilling Order
-                              </div>
-                              {orderItem.paymentMethod === 'cash' && orderItem.paymentStatus !== 'PAID' && (
-                                <button
-                                  onClick={() => handleConfirmPayment(orderItem.orderId)}
-                                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                                >
-                                  Confirm Cash Payment
-                                </button>
+              return (
+                <div className="grid grid-cols-1 gap-4">
+                  {groupedOrders.map(group => {
+                    const orderItem = group[0]; // representative for order-level details
+                    const totalEarnings = group.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                    return (
+                      <div key={orderItem.orderId} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all">
+                        
+                        {/* Item header */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-100">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg">
+                                ORDER ID: {orderItem.orderId.slice(0, 8).toUpperCase()}
+                              </span>
+                              {orderItem.paymentMethod === 'cash' && (
+                                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${orderItem.paymentStatus === 'PAID' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                                  COD: {orderItem.paymentStatus === 'PAID' ? 'PAID' : 'TO BE PAID'}
+                                </span>
                               )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1.5">
+                              Delivery Route Time Limit: <strong className="text-orange-700">{orderItem.deliveryEstimate}</strong>
+                            </p>
+                          </div>
+                          
+                          {/* Price and qty */}
+                          <div className="text-right">
+                            <span className="text-xs text-slate-400 font-medium">Total Earnings</span>
+                            <p className="font-extrabold text-slate-900 text-lg">₹{Number(totalEarnings).toFixed(2)}</p>
+                          </div>
+                        </div>
+
+                        {/* Order Info & Map */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-4">
+                          {/* Delivery Details */}
+                          <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+                            <div>
+                              <p className="font-bold text-slate-800 mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" /> 📍 Delivery Address
+                              </p>
+                              <p className="text-slate-900 font-semibold leading-relaxed">
+                                {orderItem.deliveryAddress || 'No address provided'}
+                              </p>
+                            </div>
+                            {orderItem.orderDate && (
+                              <div className="pt-2 border-t border-slate-200 mt-2 text-[11px] text-slate-500">
+                                Placed: <strong>{new Date(orderItem.orderDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Map Preview */}
+                          {orderItem.pharmacyLatitude && orderItem.userLatitude && (
+                            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-inner space-y-2 bg-slate-50 p-3 h-48 flex flex-col">
+                              <div className="flex items-center justify-between shrink-0">
+                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                  🗺️ Delivery Route Map
+                                </span>
+                                <a
+                                  href={`https://www.google.com/maps/dir/?api=1&origin=${orderItem.pharmacyLatitude},${orderItem.pharmacyLongitude}&destination=${orderItem.userLatitude},${orderItem.userLongitude}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-orange-600 hover:text-orange-800 font-semibold flex items-center gap-1"
+                                >
+                                  Open Directions ↗
+                                </a>
+                              </div>
+                              <div className="w-full flex-1 rounded-lg overflow-hidden border border-slate-200 mt-1">
+                                <iframe
+                                  title={`Route for order ${orderItem.orderId}`}
+                                  width="100%"
+                                  height="100%"
+                                  style={{ border: 0 }}
+                                  src={`https://maps.google.com/maps?saddr=${orderItem.pharmacyLatitude},${orderItem.pharmacyLongitude}&daddr=${orderItem.userLatitude},${orderItem.userLongitude}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Route / Map Preview Section */}
-                    {orderItem.pharmacyLatitude && orderItem.userLatitude && (
-                      <div className="border border-slate-200 rounded-xl overflow-hidden shadow-inner space-y-2 bg-slate-50 p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                            🗺️ Delivery Route Map
-                          </span>
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&origin=${orderItem.pharmacyLatitude},${orderItem.pharmacyLongitude}&destination=${orderItem.userLatitude},${orderItem.userLongitude}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs text-orange-600 hover:text-orange-800 font-semibold flex items-center gap-1"
-                          >
-                            Open in Google Maps Directions ↗
-                          </a>
+                        {/* Medications Loop */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-bold text-slate-800">Medicines in Order</h4>
+                          {group.map(item => (
+                            <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/80 p-4 rounded-xl border border-slate-200 items-center">
+                              {/* Medication Detail */}
+                              <div className="space-y-1">
+                                <p className="font-bold text-slate-900">{item.medicineName}</p>
+                                <div className="text-xs text-slate-500 flex gap-3">
+                                  <span>Qty: <strong className="text-slate-700">{item.quantity}</strong></span>
+                                  <span>Price: <strong className="text-slate-700">₹{Number(item.price).toFixed(2)}</strong></span>
+                                </div>
+                                <div className="mt-2">
+                                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${getItemStatusClass(item.status)}`}>
+                                    {item.status}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Shipment Action per item */}
+                              <div className="flex flex-col justify-center gap-2">
+                                {item.status === 'PENDING' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(item.id, 'PREPARING')}
+                                    className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold shadow flex items-center justify-center gap-1 transition-colors"
+                                  >
+                                    Accept & Prepare <Clock className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {item.status === 'PREPARING' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(item.id, 'SHIPPED')}
+                                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow flex items-center justify-center gap-1 transition-colors"
+                                  >
+                                    Dispatch Agent <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {item.status === 'SHIPPED' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(item.id, 'DELIVERED')}
+                                    className="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold shadow flex items-center justify-center gap-1 transition-colors"
+                                  >
+                                    Mark Delivered ✓
+                                  </button>
+                                )}
+                                {item.status === 'DELIVERED' && (
+                                  <div className="bg-green-50 text-green-700 border border-green-200 text-center py-2 rounded-lg font-bold text-xs">
+                                    ✓ Delivered
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <div className="w-full h-64 rounded-lg overflow-hidden border border-slate-200">
-                          <iframe
-                            title={`Route for order item ${orderItem.id}`}
-                            width="100%"
-                            height="100%"
-                            style={{ border: 0 }}
-                            src={`https://maps.google.com/maps?saddr=${orderItem.pharmacyLatitude},${orderItem.pharmacyLongitude}&daddr=${orderItem.userLatitude},${orderItem.userLongitude}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
-                          />
-                        </div>
+
+                        {/* Order Completion Actions */}
+                        {group.every(item => item.status === 'DELIVERED') && orderItem.paymentMethod === 'cash' && orderItem.paymentStatus !== 'PAID' && (
+                          <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+                            <button
+                              onClick={() => handleConfirmPayment(orderItem.orderId)}
+                              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors"
+                            >
+                              Confirm Cash Payment for Entire Order
+                            </button>
+                          </div>
+                        )}
+
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 

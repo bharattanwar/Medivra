@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.app</groupId>
+		<artifactId>medivra-parent</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+	<artifactId>ai-module</artifactId>
+	<name>ai-module</name>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>common-module</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>user-module</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>doctor-module</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>appointment-module</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>pharmacy-module</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>record-module</artifactId>
+		</dependency>
+		
+		<!-- For PDF text extraction -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>2.0.30</version>
+		</dependency>
+		
+		<!-- For JSON parsing of Gemini responses -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		
+		<!-- For Fuzzy Matching (Levenshtein Distance) -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-text</artifactId>
+			<version>1.10.0</version>
+		</dependency>
+	</dependencies>
+</project>

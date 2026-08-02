@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   MapPin, Phone, Package, Pill, Loader2, AlertCircle, Search,
   Navigation, Plus, Minus, CheckCircle2, ShoppingCart,
   X, Sparkles, FileText, Upload, Truck, Smartphone
 } from 'lucide-react';
 import api from '../services/api';
+import { aiService } from '../services/ai';
 import { openRazorpayCheckout } from '../services/razorpay';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -88,6 +89,7 @@ type PrescriptionSource = 'select' | 'upload';
 
 const PharmacyFinder: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>('match');
 
   // ── Nearby Tab State ──────────────────────────────────────────────────────
@@ -143,30 +145,78 @@ const PharmacyFinder: React.FC = () => {
 
   const patientId = localStorage.getItem('userId');
 
+  // Listen for prefilled items passed from Rx Scanner
+  useEffect(() => {
+    if (location.state?.prefilledItems && location.state.prefilledItems.length > 0) {
+      setActiveTab('match');
+      setMatchMode('manual');
+      const items = location.state.prefilledItems.map((item: any, idx: number) => ({
+        medicineId: item.medicineId || `med_${idx}_${Date.now()}`,
+        medicineName: item.medicineName,
+        quantity: item.quantity || 10
+      }));
+      setBasket(items);
+    }
+  }, [location.state]);
+
   // ── Geolocation helpers ───────────────────────────────────────────────────
+
+  // IP-based geolocation fallback (works on HTTP)
+  const ipGeoFallback = useCallback(async (
+    onSuccess: (lat: number, lng: number) => void,
+    setLoading: (v: boolean) => void,
+    setError: (e: string) => void
+  ) => {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.latitude && data.longitude) {
+          onSuccess(data.latitude, data.longitude);
+          setLoading(false);
+          return;
+        }
+      }
+      setError('Could not detect location. Please check your network connection.');
+      setLoading(false);
+    } catch {
+      setError('Location detection failed. Please check your internet connection.');
+      setLoading(false);
+    }
+  }, []);
 
   const requestLocation = useCallback((
     onSuccess: (lat: number, lng: number) => void,
     setLoading: (v: boolean) => void,
     setError: (e: string) => void
   ) => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser.');
-      return;
-    }
     setLoading(true);
     setError('');
+
+    // Check if geolocation is available and we're in a secure context
+    if (!navigator.geolocation || !window.isSecureContext) {
+      console.warn('Geolocation unavailable (insecure context or unsupported). Using IP-based fallback.');
+      ipGeoFallback(onSuccess, setLoading, setError);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         onSuccess(pos.coords.latitude, pos.coords.longitude);
         setLoading(false);
       },
-      () => {
-        setError('Location access denied. Please allow location access.');
-        setLoading(false);
+      (err) => {
+        console.warn('Browser geolocation failed:', err.message, '— falling back to IP geolocation.');
+        // Fallback to IP-based geolocation
+        ipGeoFallback(onSuccess, setLoading, setError);
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 300000 // cache for 5 minutes
       }
     );
-  }, []);
+  }, [ipGeoFallback]);
 
   // Auto-detect location on first load
   useEffect(() => {
@@ -243,47 +293,36 @@ const PharmacyFinder: React.FC = () => {
     }
   };
 
-  // Handle External Prescription Upload with simulated AI OCR loader
+  // Handle External Prescription Upload with Real Gemini AI OCR
   const handleExternalUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile || !patientId) return;
     try {
       setUploadLoading(true);
       setUploadProgressMsg('Uploading prescription file securely...');
-      await new Promise(r => setTimeout(r, 600));
-      setUploadProgressMsg('Running AI-OCR Medical Scanning model...');
-      await new Promise(r => setTimeout(r, 700));
-      setUploadProgressMsg('Extracting pharmaceutical formulations & dosages...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 400));
+      setUploadProgressMsg('Running Gemini Multimodal Vision OCR...');
 
-      const formData = new FormData();
-      formData.append('patientId', patientId);
-      formData.append('notes', uploadNotes);
-      formData.append('file', uploadFile);
+      const aiRes = await aiService.extractPrescription(patientId, uploadFile);
+      setUploadProgressMsg('Normalizing medicines against database via Levenshtein matching...');
+      await new Promise(r => setTimeout(r, 400));
 
-      const res = await api.post('/records/upload-external', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      if (res.data) {
-        const record = res.data;
-        const itemsRes = await api.get(`/records/${record.id}/items`);
-        const items = itemsRes.data.map((item: any) => ({
-          name: item.medicineName,
-          strength: item.strength || '',
-          dosage: item.dosage || '1 tablet',
-          frequency: item.frequency || '1-0-1',
-          duration: item.duration || '5 days',
-          quantity: 10
+      if (aiRes && aiRes.medicines) {
+        const items = aiRes.medicines.map((m) => ({
+          name: m.matchedMedicineName || m.extractedName,
+          strength: '',
+          dosage: m.dosage || '1 tablet',
+          frequency: m.frequency || '1-0-1',
+          duration: m.duration || '5 days',
+          quantity: m.quantity || 10
         }));
         setIdentifiedItems(items);
-        setActiveRecordId(record.id);
         setUploadFile(null);
         setUploadNotes('');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to upload/analyze prescription.');
+      alert('Failed to upload/analyze prescription with Gemini AI.');
     } finally {
       setUploadLoading(false);
       setUploadProgressMsg('');
@@ -622,6 +661,13 @@ const PharmacyFinder: React.FC = () => {
               className={tabClass('match')}
             >
               <Sparkles className="h-4 w-4" /> Order Medicines
+            </button>
+            <button
+              id="tab-tracking"
+              onClick={() => navigate('/patient/orders')}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
+            >
+              <Truck className="h-4 w-4" /> Order Tracking
             </button>
           </div>
         </div>
@@ -1168,236 +1214,259 @@ const PharmacyFinder: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Allocation Cards */}
-                  {matchResult.allocations.map((alloc, idx) => (
-                    <div key={alloc.pharmacyId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                      {/* Card Header */}
-                      <div className="bg-gradient-to-r from-blue-50 to-sky-50 px-5 py-4 border-b border-blue-100">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="w-8 h-8 bg-blue-600 text-white text-sm font-bold rounded-full flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <div>
-                              <h4 className="font-bold text-slate-900">{alloc.pharmacyName}</h4>
-                              <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                                <MapPin className="h-3 w-3" /> {alloc.pharmacyAddress}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === alloc.pharmacyId ? null : alloc.pharmacyId)}
-                              className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 cursor-pointer animate-fade-in"
-                            >
-                              <MapPin className="h-3.5 w-3.5" /> {activeMapPharmacyId === alloc.pharmacyId ? 'Hide Map' : 'Map'}
-                            </button>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-400">Distance</p>
-                              <p className="font-bold text-blue-600">{alloc.distanceKm} km</p>
-                            </div>
-                          </div>
-                        </div>
-                        {activeMapPharmacyId === alloc.pharmacyId && (
-                          <div className="mt-3 w-full h-48 rounded-xl overflow-hidden border border-slate-200 bg-white">
-                            <iframe
-                              title={`Map for ${alloc.pharmacyName}`}
-                              width="100%"
-                              height="100%"
-                              style={{ border: 0 }}
-                              src={`https://maps.google.com/maps?q=${encodeURIComponent(alloc.pharmacyAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                            />
-                          </div>
-                        )}
+                  {/* Check for No Match / No Allocations */}
+                  {matchResult.allocations.length === 0 || Number(matchResult.totalAmount) === 0 ? (
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center space-y-4 animate-fade-in shadow-sm">
+                      <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                        <AlertCircle className="h-7 w-7" />
                       </div>
-
-                      {/* Items */}
-                      <div className="divide-y divide-slate-100">
-                        {alloc.items.map(item => (
-                          <div key={item.medicineId} className="flex items-center justify-between px-5 py-3 bg-white">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-800">{item.medicineName}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">
-                                {item.quantity} × ₹{Number(item.unitPrice).toFixed(2)}
-                              </p>
-                            </div>
-                            <p className="font-bold text-slate-700">₹{Number(item.lineTotal).toFixed(2)}</p>
-                          </div>
-                        ))}
+                      <div>
+                        <h4 className="text-lg font-extrabold text-red-900">No Matching Medicines Found</h4>
+                        <p className="text-xs text-red-700 max-w-md mx-auto leading-relaxed mt-1">
+                          None of the requested medicines were found in stock at nearby pharmacies within your search radius.
+                        </p>
                       </div>
-
-                      {/* Subtotal */}
-                      <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-500">Subtotal</p>
-                        <p className="font-bold text-lg text-blue-700">₹{Number(alloc.subtotal).toFixed(2)}</p>
+                      <div className="p-3 bg-white/80 border border-red-200 rounded-xl text-xs font-semibold text-red-800 max-w-sm mx-auto">
+                        ⚠️ Continue to payment option is disabled as no medicines were found.
                       </div>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Please modify your medicine list or expand your search radius to locate pharmacies.
+                      </p>
                     </div>
-                  ))}
-
-                  {/* Checkout Form */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-                    <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                      <ShoppingCart className="h-4 w-4 text-blue-600" /> Checkout
-                      <span className="ml-auto text-xs font-normal text-slate-400">
-                        {paymentStep === 'address' ? 'Step 1 of 2 — Delivery' : 'Step 2 of 2 — Payment'}
-                      </span>
-                    </h3>
-
-                    {/* Step 1: Detect GPS for Delivery */}
-                    {(paymentStep === 'address') && (
-                      <>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <div className={`p-2 rounded-xl ${(matchLocation || userLocation) ? 'bg-green-50' : 'bg-slate-50'}`}>
-                              <Navigation className={`h-4 w-4 ${(matchLocation || userLocation) ? 'text-green-600' : 'text-slate-400'}`} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-slate-700">Delivery via GPS Location</p>
-                              <p className="text-[10px] text-slate-400">We'll use your GPS coordinates for delivery routing</p>
-                            </div>
-                          </div>
-                          {(matchLocation || userLocation) ? (
-                            <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
-                              <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-                              <span>📡 GPS active — {(matchLocation || userLocation)!.lat.toFixed(4)}, {(matchLocation || userLocation)!.lng.toFixed(4)}</span>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-amber-600 font-medium">⚠️ GPS location required for delivery</p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleCheckout}
-                          disabled={matchGeoLoading}
-                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-                        >
-                          {matchGeoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-                          {(matchLocation || userLocation) ? 'Continue to Payment' : 'Detect GPS & Continue'}
-                        </button>
-                      </>
-                    )}
-
-                    {/* Step 2: Payment Method Selection */}
-                    {(paymentStep === 'method' || paymentStep === 'processing') && (
-                      <>
-                        {/* Delivery location summary */}
-                        <div className="flex items-center justify-between bg-green-50/50 border border-green-200 rounded-xl px-4 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <Navigation className="h-4 w-4 text-green-600" />
-                            <div>
-                              <p className="text-[11px] text-green-600 font-semibold uppercase tracking-wide">Delivering to GPS Location</p>
-                              <p className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{deliveryAddress}</p>
-                            </div>
-                          </div>
-                          {paymentStep === 'method' && (
-                            <button
-                              type="button"
-                              onClick={() => setPaymentStep('address')}
-                              className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
-                            >
-                              Re-detect
-                            </button>
-                          )}
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold text-slate-500 mb-3">Select Payment Method</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* Online / UPI */}
-                            <button
-                              type="button"
-                              disabled={paymentStep === 'processing'}
-                              onClick={() => setPaymentMethod('online')}
-                              className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
-                                paymentMethod === 'online'
-                                  ? 'border-blue-600 bg-blue-50 shadow-md shadow-blue-100'
-                                  : 'border-slate-200 hover:border-blue-300 bg-white'
-                              } disabled:opacity-60 disabled:cursor-not-allowed`}
-                            >
-                              {paymentMethod === 'online' && (
-                                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-blue-600" />
-                              )}
-                              <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-sky-600 rounded-xl flex items-center justify-center">
-                                  <Smartphone className="h-5 w-5 text-white" />
-                                </div>
+                  ) : (
+                    <>
+                      {/* Allocation Cards */}
+                      {matchResult.allocations.map((alloc, idx) => (
+                        <div key={alloc.pharmacyId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                          {/* Card Header */}
+                          <div className="bg-gradient-to-r from-blue-50 to-sky-50 px-5 py-4 border-b border-blue-100">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 bg-blue-600 text-white text-sm font-bold rounded-full flex items-center justify-center">
+                                  {idx + 1}
+                                </span>
                                 <div>
-                                  <p className="text-sm font-bold text-slate-800">UPI / Online</p>
-                                  <p className="text-[11px] text-slate-400">Razorpay · Cards · Net Banking</p>
+                                  <h4 className="font-bold text-slate-900">{alloc.pharmacyName}</h4>
+                                  <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                                    <MapPin className="h-3 w-3" /> {alloc.pharmacyAddress}
+                                  </p>
                                 </div>
                               </div>
-                              <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">Instant Confirmation</span>
-                            </button>
-
-                            {/* Cash on Delivery */}
-                            <button
-                              type="button"
-                              disabled={paymentStep === 'processing'}
-                              onClick={() => setPaymentMethod('cod')}
-                              className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
-                                paymentMethod === 'cod'
-                                  ? 'border-emerald-600 bg-emerald-50 shadow-md shadow-emerald-100'
-                                  : 'border-slate-200 hover:border-emerald-300 bg-white'
-                              } disabled:opacity-60 disabled:cursor-not-allowed`}
-                            >
-                              {paymentMethod === 'cod' && (
-                                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-emerald-600" />
-                              )}
-                              <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-                                  <Truck className="h-5 w-5 text-white" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800">Pay on Delivery</p>
-                                  <p className="text-[11px] text-slate-400">Cash / Card at doorstep</p>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === alloc.pharmacyId ? null : alloc.pharmacyId)}
+                                  className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 cursor-pointer animate-fade-in"
+                                >
+                                  <MapPin className="h-3.5 w-3.5" /> {activeMapPharmacyId === alloc.pharmacyId ? 'Hide Map' : 'Map'}
+                                </button>
+                                <div className="text-right">
+                                  <p className="text-xs text-slate-400">Distance</p>
+                                  <p className="font-bold text-blue-600">{alloc.distanceKm} km</p>
                                 </div>
                               </div>
-                              <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Pay when received</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {paymentError && (
-                          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 shrink-0" /> {paymentError}
-                          </div>
-                        )}
-
-                        {checkoutSuccess ? (
-                          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
-                            ✓ Order confirmed! Redirecting to order tracking…
-                          </div>
-                        ) : paymentStep === 'processing' ? (
-                          <div className="flex flex-col items-center py-6 gap-3">
-                            <div className="h-12 w-12 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
-                            <p className="text-sm font-semibold text-slate-600">
-                              {paymentMethod === 'cod' ? 'Placing your order…' : 'Connecting to payment gateway…'}
-                            </p>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handlePaymentConfirm}
-                            disabled={!paymentMethod || checkoutLoading}
-                            className={`w-full py-3 font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 ${
-                              paymentMethod === 'cod'
-                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
-                                : 'bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-800 text-white'
-                            }`}
-                          >
-                            {paymentMethod === 'cod' ? (
-                              <><Truck className="h-4 w-4" /> Place Order — Pay on Delivery</>
-                            ) : paymentMethod === 'online' ? (
-                              <><Smartphone className="h-4 w-4" /> Pay ₹{Number(matchResult.totalAmount).toFixed(2)} Online</>
-                            ) : (
-                              'Select a payment method above'
+                            </div>
+                            {activeMapPharmacyId === alloc.pharmacyId && (
+                              <div className="mt-3 w-full h-48 rounded-xl overflow-hidden border border-slate-200 bg-white">
+                                <iframe
+                                  title={`Map for ${alloc.pharmacyName}`}
+                                  width="100%"
+                                  height="100%"
+                                  style={{ border: 0 }}
+                                  src={`https://maps.google.com/maps?q=${encodeURIComponent(alloc.pharmacyAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                />
+                              </div>
                             )}
-                          </button>
+                          </div>
+
+                          {/* Items */}
+                          <div className="divide-y divide-slate-100">
+                            {alloc.items.map(item => (
+                              <div key={item.medicineId} className="flex items-center justify-between px-5 py-3 bg-white">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-800">{item.medicineName}</p>
+                                  <p className="text-xs text-slate-400 mt-0.5">
+                                    {item.quantity} × ₹{Number(item.unitPrice).toFixed(2)}
+                                  </p>
+                                </div>
+                                <p className="font-bold text-slate-700">₹{Number(item.lineTotal).toFixed(2)}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Subtotal */}
+                          <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                            <p className="text-sm font-semibold text-slate-500">Subtotal</p>
+                            <p className="font-bold text-lg text-blue-700">₹{Number(alloc.subtotal).toFixed(2)}</p>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Checkout Form */}
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                          <ShoppingCart className="h-4 w-4 text-blue-600" /> Checkout
+                          <span className="ml-auto text-xs font-normal text-slate-400">
+                            {paymentStep === 'address' ? 'Step 1 of 2 — Delivery' : 'Step 2 of 2 — Payment'}
+                          </span>
+                        </h3>
+
+                        {/* Step 1: Detect GPS for Delivery */}
+                        {(paymentStep === 'address') && (
+                          <>
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <div className={`p-2 rounded-xl ${(matchLocation || userLocation) ? 'bg-green-50' : 'bg-slate-50'}`}>
+                                  <Navigation className={`h-4 w-4 ${(matchLocation || userLocation) ? 'text-green-600' : 'text-slate-400'}`} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-slate-700">Delivery via GPS Location</p>
+                                  <p className="text-[10px] text-slate-400">We'll use your GPS coordinates for delivery routing</p>
+                                </div>
+                              </div>
+                              {(matchLocation || userLocation) ? (
+                                <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
+                                  <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                                  <span>📡 GPS active — {(matchLocation || userLocation)!.lat.toFixed(4)}, {(matchLocation || userLocation)!.lng.toFixed(4)}</span>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-amber-600 font-medium">⚠️ GPS location required for delivery</p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleCheckout}
+                              disabled={matchGeoLoading}
+                              className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              {matchGeoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                              {(matchLocation || userLocation) ? 'Continue to Payment' : 'Detect GPS & Continue'}
+                            </button>
+                          </>
                         )}
-                      </>
-                    )}
-                  </div>
+
+                        {/* Step 2: Payment Method Selection */}
+                        {(paymentStep === 'method' || paymentStep === 'processing') && (
+                          <>
+                            {/* Delivery location summary */}
+                            <div className="flex items-center justify-between bg-green-50/50 border border-green-200 rounded-xl px-4 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <Navigation className="h-4 w-4 text-green-600" />
+                                <div>
+                                  <p className="text-[11px] text-green-600 font-semibold uppercase tracking-wide">Delivering to GPS Location</p>
+                                  <p className="text-sm font-semibold text-slate-800 truncate max-w-[260px]">{deliveryAddress}</p>
+                                </div>
+                              </div>
+                              {paymentStep === 'method' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPaymentStep('address')}
+                                  className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
+                                >
+                                  Re-detect
+                                </button>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold text-slate-500 mb-3">Select Payment Method</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {/* Online / UPI */}
+                                <button
+                                  type="button"
+                                  disabled={paymentStep === 'processing'}
+                                  onClick={() => setPaymentMethod('online')}
+                                  className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                                    paymentMethod === 'online'
+                                      ? 'border-blue-600 bg-blue-50 shadow-md shadow-blue-100'
+                                      : 'border-slate-200 hover:border-blue-300 bg-white'
+                                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                                >
+                                  {paymentMethod === 'online' && (
+                                    <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-blue-600" />
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-sky-600 rounded-xl flex items-center justify-center">
+                                      <Smartphone className="h-5 w-5 text-white" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-800">UPI / Online</p>
+                                      <p className="text-[11px] text-slate-400">Razorpay · Cards · Net Banking</p>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">Instant Confirmation</span>
+                                </button>
+
+                                {/* Cash on Delivery */}
+                                <button
+                                  type="button"
+                                  disabled={paymentStep === 'processing'}
+                                  onClick={() => setPaymentMethod('cod')}
+                                  className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                                    paymentMethod === 'cod'
+                                      ? 'border-emerald-600 bg-emerald-50 shadow-md shadow-emerald-100'
+                                      : 'border-slate-200 hover:border-emerald-300 bg-white'
+                                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                                >
+                                  {paymentMethod === 'cod' && (
+                                    <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-emerald-600" />
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                                      <Truck className="h-5 w-5 text-white" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-800">Pay on Delivery</p>
+                                      <p className="text-[11px] text-slate-400">Cash / Card at doorstep</p>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Pay when received</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {paymentError && (
+                              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 shrink-0" /> {paymentError}
+                              </div>
+                            )}
+
+                            {checkoutSuccess ? (
+                              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+                                ✓ Order confirmed! Redirecting to order tracking…
+                              </div>
+                            ) : paymentStep === 'processing' ? (
+                              <div className="flex flex-col items-center py-6 gap-3">
+                                <div className="h-12 w-12 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
+                                <p className="text-sm font-semibold text-slate-600">
+                                  {paymentMethod === 'cod' ? 'Placing your order…' : 'Connecting to payment gateway…'}
+                                </p>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handlePaymentConfirm}
+                                disabled={!paymentMethod || checkoutLoading}
+                                className={`w-full py-3 font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 ${
+                                  paymentMethod === 'cod'
+                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
+                                    : 'bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-800 text-white'
+                                }`}
+                              >
+                                {paymentMethod === 'cod' ? (
+                                  <><Truck className="h-4 w-4" /> Place Order — Pay on Delivery</>
+                                ) : paymentMethod === 'online' ? (
+                                  <><Smartphone className="h-4 w-4" /> Pay ₹{Number(matchResult.totalAmount).toFixed(2)} Online</>
+                                ) : (
+                                  'Select a payment method above'
+                                )}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

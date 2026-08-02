@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
+import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DoctorRegistration from './pages/DoctorRegistration';
@@ -21,6 +22,9 @@ import OrderTracking from './pages/OrderTracking';
 import EmergencySOS from './pages/EmergencySOS';
 import AmbulanceDashboard from './pages/AmbulanceDashboard';
 import HospitalEmergencyDashboard from './pages/HospitalEmergencyDashboard';
+import ReportExplainer from './pages/ReportExplainer';
+import SmartBooking from './pages/SmartBooking';
+import PrescriptionScanner from './pages/PrescriptionScanner';
 
 import { WebSocketProvider } from './context/WebSocketContext';
 
@@ -34,30 +38,37 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/doctor-registration" element={<DoctorRegistration />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/patient/dashboard" element={<PatientDashboard />} />
-            <Route path="/patient/appointments" element={<MyAppointments />} />
-            <Route path="/patient/payments" element={<PaymentHistory />} />
-            <Route path="/doctor/availability" element={<ManageAvailability />} />
-            <Route path="/doctor/appointments" element={<DoctorAppointments />} />
-            <Route path="/consultation/:appointmentId" element={<ConsultationRoom />} />
+            
+            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/patient/dashboard" element={<PrivateRoute allowedRoles={['patient']}><PatientDashboard /></PrivateRoute>} />
+            <Route path="/patient/appointments" element={<PrivateRoute allowedRoles={['patient']}><MyAppointments /></PrivateRoute>} />
+            <Route path="/patient/payments" element={<PrivateRoute allowedRoles={['patient']}><PaymentHistory /></PrivateRoute>} />
+            
+            {/* AI Routes */}
+            <Route path="/patient/ai/reports" element={<PrivateRoute allowedRoles={['patient']}><ReportExplainer /></PrivateRoute>} />
+            <Route path="/patient/ai/booking" element={<PrivateRoute allowedRoles={['patient']}><SmartBooking /></PrivateRoute>} />
+            <Route path="/patient/ai/prescriptions" element={<PrivateRoute allowedRoles={['patient']}><PrescriptionScanner /></PrivateRoute>} />
+
+            <Route path="/doctor/availability" element={<PrivateRoute allowedRoles={['doctor']}><ManageAvailability /></PrivateRoute>} />
+            <Route path="/doctor/appointments" element={<PrivateRoute allowedRoles={['doctor']}><DoctorAppointments /></PrivateRoute>} />
+            <Route path="/consultation/:appointmentId" element={<PrivateRoute allowedRoles={['patient', 'doctor']}><ConsultationRoom /></PrivateRoute>} />
             
             {/* Admin Routes */}
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/doctors" element={<AdminDoctors />} />
-            <Route path="/admin/appointments" element={<AdminAppointments />} />
+            <Route path="/admin/dashboard" element={<PrivateRoute allowedRoles={['admin']}><AdminDashboard /></PrivateRoute>} />
+            <Route path="/admin/users" element={<PrivateRoute allowedRoles={['admin']}><AdminUsers /></PrivateRoute>} />
+            <Route path="/admin/doctors" element={<PrivateRoute allowedRoles={['admin']}><AdminDoctors /></PrivateRoute>} />
+            <Route path="/admin/appointments" element={<PrivateRoute allowedRoles={['admin']}><AdminAppointments /></PrivateRoute>} />
 
             {/* Pharmacy Routes */}
             <Route path="/pharmacy/register" element={<PharmacyRegistration />} />
-            <Route path="/pharmacy/dashboard" element={<PharmacyDashboard />} />
-            <Route path="/patient/pharmacy" element={<PharmacyFinder />} />
-            <Route path="/patient/orders" element={<OrderTracking />} />
+            <Route path="/pharmacy/dashboard" element={<PrivateRoute allowedRoles={['pharmacy']}><PharmacyDashboard /></PrivateRoute>} />
+            <Route path="/patient/pharmacy" element={<PrivateRoute allowedRoles={['patient']}><PharmacyFinder /></PrivateRoute>} />
+            <Route path="/patient/orders" element={<PrivateRoute allowedRoles={['patient']}><OrderTracking /></PrivateRoute>} />
 
             {/* Emergency SOS Routes */}
-            <Route path="/patient/emergency" element={<EmergencySOS />} />
-            <Route path="/ambulance/dashboard" element={<AmbulanceDashboard />} />
-            <Route path="/hospital/emergencies" element={<HospitalEmergencyDashboard />} />
+            <Route path="/patient/emergency" element={<PrivateRoute allowedRoles={['patient']}><EmergencySOS /></PrivateRoute>} />
+            <Route path="/ambulance/dashboard" element={<PrivateRoute allowedRoles={['ambulance']}><AmbulanceDashboard /></PrivateRoute>} />
+            <Route path="/hospital/emergencies" element={<PrivateRoute allowedRoles={['hospital']}><HospitalEmergencyDashboard /></PrivateRoute>} />
           </Routes>
         </Layout>
       </Router>

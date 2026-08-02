@@ -179,12 +179,38 @@ const MyAppointments: React.FC = () => {
     return dateStr > getLocalTodayString();
   };
 
+  const isAppointmentElapsed = (dateStr: string, timeStr: string) => {
+    if (!dateStr) return false;
+    const today = getLocalTodayString();
+    if (dateStr < today) return true;
+    if (dateStr > today) return false;
+
+    // Same day, check time.
+    if (!timeStr) return false;
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!match) return false;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const ampm = match[3]?.toUpperCase();
+
+    if (ampm === 'PM' && hours < 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+
+    const now = new Date();
+    if (now.getHours() > hours) return true;
+    if (now.getHours() === hours && now.getMinutes() > minutes) return true;
+
+    return false;
+  };
+
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">My Appointments</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900">Appointments History</h1>
             <p className="text-gray-500 mt-1">Manage your upcoming and past medical consultations.</p>
           </div>
           <button
@@ -269,34 +295,39 @@ const MyAppointments: React.FC = () => {
                         >
                           📄 View Prescription
                         </button>
-                        <button
-                          onClick={() => handleStartConsultation(apt)}
-                          className="flex-1 md:flex-initial bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-green-700 transition-all shadow-md active:scale-95"
-                        >
-                          💬 Chat
-                        </button>
-                        {apt.consultationType !== 'IN_CLINIC' && (
-                          <button
-                            onClick={() => navigate(`/consultation/${apt.id}`)}
-                            className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1"
-                          >
-                            📹 Join Call
-                          </button>
-                        )}
-                        {isCancelable(apt.appointmentDate) && (
+                        
+                        {!isAppointmentElapsed(apt.appointmentDate, apt.timeSlot) && (
                           <>
                             <button
-                              onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
-                              className="flex-1 md:flex-initial bg-white border border-blue-200 text-blue-600 px-4 py-2 rounded-xl font-semibold hover:bg-blue-50 transition-all text-xs"
+                              onClick={() => handleStartConsultation(apt)}
+                              className="flex-1 md:flex-initial bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-green-700 transition-all shadow-md active:scale-95"
                             >
-                              📅 Reschedule
+                              💬 Chat
                             </button>
-                            <button
-                              onClick={() => setCancelModalApt({ id: apt.id })}
-                              className="flex-1 md:flex-initial bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl font-semibold hover:bg-red-50 transition-all text-xs"
-                            >
-                              🚫 Cancel
-                            </button>
+                            {apt.consultationType !== 'IN_CLINIC' && (
+                              <button
+                                onClick={() => navigate(`/consultation/${apt.id}`)}
+                                className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1"
+                              >
+                                📹 Join Call
+                              </button>
+                            )}
+                            {isCancelable(apt.appointmentDate) && (
+                              <>
+                                <button
+                                  onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
+                                  className="flex-1 md:flex-initial bg-white border border-blue-200 text-blue-600 px-4 py-2 rounded-xl font-semibold hover:bg-blue-50 transition-all text-xs"
+                                >
+                                  📅 Reschedule
+                                </button>
+                                <button
+                                  onClick={() => setCancelModalApt({ id: apt.id })}
+                                  className="flex-1 md:flex-initial bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl font-semibold hover:bg-red-50 transition-all text-xs"
+                                >
+                                  🚫 Cancel
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>

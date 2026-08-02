@@ -55,6 +55,10 @@
 			<groupId>com.app</groupId>
 			<artifactId>emergency-module</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.app</groupId>
+			<artifactId>ai-module</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>
