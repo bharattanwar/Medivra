@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, DollarSign, Star, Activity, User, Loader2, Calendar, CheckCircle2 } from 'lucide-react';
+import { Search, MapPin, IndianRupee, Star, Activity, User, Loader2, Calendar, CheckCircle2 } from 'lucide-react';
 import { aiService, type AppointmentRecommendationResponse, type DoctorRecommendation } from '../services/ai';
 import api from '../services/api';
 import BookingModal from '../components/BookingModal';
@@ -184,7 +184,7 @@ export default function SmartBooking() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                      <DollarSign className="h-4 w-4 mr-1 text-gray-400" />
+                      <IndianRupee className="h-4 w-4 mr-1 text-gray-400" />
                       Budget Range
                     </label>
                     <select
@@ -193,9 +193,9 @@ export default function SmartBooking() {
                       className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border"
                     >
                       <option>Any</option>
-                      <option>Low (&lt; $50)</option>
-                      <option>Medium ($50 - $150)</option>
-                      <option>Premium (&gt; $150)</option>
+                      <option>Budget (&lt; ₹500)</option>
+                      <option>Moderate (₹500 - ₹1,000)</option>
+                      <option>Premium (&gt; ₹1,000)</option>
                     </select>
                   </div>
 
@@ -309,10 +309,6 @@ export default function SmartBooking() {
                 </div>
               </div>
 
-              <div className="bg-indigo-50 rounded-lg p-5 text-sm text-indigo-800 shadow-sm border border-indigo-100">
-                <p><strong>AI Reasoning:</strong> {result.aiExplanation}</p>
-              </div>
-
               {/* Doctor List */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900 flex items-center justify-between">
@@ -376,10 +372,6 @@ export default function SmartBooking() {
                                 <Calendar className="h-4 w-4" /> Book Appointment
                               </button>
                             </div>
-                          </div>
-
-                          <div className="mt-4 bg-slate-50 rounded-xl p-3.5 border border-slate-100 text-xs leading-relaxed text-slate-700">
-                            <span className="font-bold text-slate-900">Why recommended:</span> {rec.explanation}
                           </div>
                         </div>
                       </div>

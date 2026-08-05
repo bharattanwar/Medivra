@@ -59,10 +59,12 @@ public class AppointmentRecommendationService {
                 "STRICT RULES:\n" +
                 "1. First, determine which medical specialty is appropriate for the given symptoms.\n" +
                 "2. ONLY recommend doctors whose specialization MATCHES that specialty. For example, do NOT recommend a Dermatologist for chest pain or a Cardiologist for skin issues.\n" +
-                "3. If NO doctor in the list has a matching specialization, check if there is a General Physician / General Medicine / Family Medicine doctor available. If yes, recommend them as a fallback.\n" +
-                "4. If there are NO matching specialists AND NO General Physician available, return an EMPTY rankedDoctors array [].\n" +
-                "5. Never force-fit irrelevant doctors just to fill the list. Quality over quantity.\n" +
-                "6. Return at most 3 doctors, but fewer if fewer are relevant. Zero is acceptable.\n\n" +
+                "3. GENDER FILTERING: Infer each doctor's gender from their full name (e.g., female names like Ananya, Priya, Sunita, Kavita -> Female; male names like Rajesh, Vikram, Suresh, Amit -> Male). If the patient's preference specifies a preferred gender ('Male' or 'Female'), strongly prioritize doctors of that gender among qualified specialists.\n" +
+                "4. BUDGET FILTERING: All fees are in INR (₹). If patient preferences specify a budget (e.g., 'Budget (< ₹500)', 'Moderate (₹500 - ₹1,000)', 'Premium (> ₹1,000)'), prioritize doctors whose consultation fee aligns with that budget tier.\n" +
+                "5. If NO doctor in the list has a matching specialization, check if there is a General Physician / General Medicine / Family Medicine doctor available. If yes, recommend them as a fallback.\n" +
+                "6. If there are NO matching specialists AND NO General Physician available, return an EMPTY rankedDoctors array [].\n" +
+                "7. Never force-fit irrelevant doctors just to fill the list. Quality over quantity.\n" +
+                "8. Return at most 3 doctors, but fewer if fewer are relevant. Zero is acceptable.\n\n" +
                 "Patient Symptoms: " + request.getSymptoms() + "\n" +
                 "Patient Preferences: " + request.getPreferences() + "\n\n" +
                 "Available Doctors:\n" + doctorsContext.toString() + "\n\n" +
