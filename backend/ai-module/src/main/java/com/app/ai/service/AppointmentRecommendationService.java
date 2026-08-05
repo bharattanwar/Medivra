@@ -55,11 +55,18 @@ public class AppointmentRecommendationService {
         }
 
         // 2. Call Gemini
-        String prompt = "You are an AI Doctor Recommendation Engine.\n" +
+        String prompt = "You are an AI Doctor Recommendation Engine. You MUST only recommend doctors whose specialization is directly relevant to the patient's symptoms.\n\n" +
+                "STRICT RULES:\n" +
+                "1. First, determine which medical specialty is appropriate for the given symptoms.\n" +
+                "2. ONLY recommend doctors whose specialization MATCHES that specialty. For example, do NOT recommend a Dermatologist for chest pain or a Cardiologist for skin issues.\n" +
+                "3. If NO doctor in the list has a matching specialization, check if there is a General Physician / General Medicine / Family Medicine doctor available. If yes, recommend them as a fallback.\n" +
+                "4. If there are NO matching specialists AND NO General Physician available, return an EMPTY rankedDoctors array [].\n" +
+                "5. Never force-fit irrelevant doctors just to fill the list. Quality over quantity.\n" +
+                "6. Return at most 3 doctors, but fewer if fewer are relevant. Zero is acceptable.\n\n" +
                 "Patient Symptoms: " + request.getSymptoms() + "\n" +
                 "Patient Preferences: " + request.getPreferences() + "\n\n" +
                 "Available Doctors:\n" + doctorsContext.toString() + "\n\n" +
-                "Based on the symptoms and preferences, select the top 3 best matching doctors.\n";
+                "Based on the above rules, select the best matching doctors (0 to 3).\n";
         
         String schema = "{\n" +
                 "  \"recommendedSpecialty\": \"The medical specialty most appropriate for these symptoms\",\n" +
@@ -67,10 +74,10 @@ public class AppointmentRecommendationService {
                 "  \"rankedDoctors\": [\n" +
                 "    {\n" +
                 "      \"doctorId\": \"The UUID of the recommended doctor\",\n" +
-                "      \"explanation\": \"Why this specific doctor is recommended based on their profile and the patient's symptoms/preferences\"\n" +
+                "      \"explanation\": \"Why this specific doctor is recommended based on their specialty match and the patient's symptoms/preferences\"\n" +
                 "    }\n" +
                 "  ],\n" +
-                "  \"aiExplanation\": \"Overall explanation of the recommendation strategy\"\n" +
+                "  \"aiExplanation\": \"Overall explanation of the recommendation strategy. If no doctors matched, explain why and suggest what specialty the patient should look for.\"\n" +
                 "}";
 
         String aiResponse = geminiService.generateStructuredJson(prompt, schema, "APPOINTMENT_RECOMMENDATION", request.getPatientId());

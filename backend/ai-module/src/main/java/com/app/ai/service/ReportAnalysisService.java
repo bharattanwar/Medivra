@@ -92,16 +92,6 @@ public class ReportAnalysisService {
 
             summaryRepository.save(summary);
 
-            // Notify patient
-            eventPublisher.publishEvent(new NotificationEvent(
-                this,
-                request.getPatientId(),
-                "Medical Report Analyzed",
-                "Your " + request.getReportType() + " report has been analyzed by Medivra AI.",
-                NotificationType.REPORT_ANALYZED,
-                report.getId().toString()
-            ));
-
             return mapToResponse(report, summary);
         } catch (Exception e) {
             throw new RuntimeException("Failed to analyze report: " + e.getMessage(), e);

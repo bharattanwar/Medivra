@@ -323,56 +323,69 @@ export default function SmartBooking() {
                   {loadingDoctors && <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />}
                 </h3>
 
-                {getRankedDoctors().map((rec, index) => {
-                  const docInfo = doctorDetailsMap[rec.doctorId];
-                  const docName = docInfo?.fullName || `Dr. Specialist (${rec.doctorId.slice(0, 6)})`;
-                  const docSpec = docInfo?.specialization || result.recommendedSpecialty;
-                  const fee = docInfo?.consultationFee || 500;
-                  const exp = docInfo?.experienceYears || 8;
-                  const hospital = docInfo?.hospitalName || 'Medivra Multi-Specialty Clinic';
-
-                  return (
-                    <div key={rec.doctorId} className="bg-white shadow-md rounded-2xl overflow-hidden border border-slate-200 transition-all hover:border-indigo-300 relative">
-                      <div className="absolute top-0 right-0 bg-indigo-600 text-white px-3 py-1 rounded-bl-xl font-bold text-xs shadow">
-                        #{index + 1} Match
-                      </div>
-                      <div className="p-6">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 bg-indigo-100 text-indigo-700 font-bold rounded-2xl flex items-center justify-center text-xl shrink-0 border border-indigo-200">
-                              {docName.replace('Dr. ', '').charAt(0)}
-                            </div>
-                            <div>
-                              <h4 className="text-lg font-bold text-slate-900">{docName}</h4>
-                              <p className="text-xs text-indigo-600 font-semibold">{docSpec} • {exp} Years Exp.</p>
-                              <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                                <MapPin className="h-3 w-3" /> {hospital}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4 sm:flex-col sm:items-end w-full sm:w-auto justify-between border-t sm:border-t-0 pt-3 sm:pt-0">
-                            <div>
-                              <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Fee</p>
-                              <p className="text-xl font-extrabold text-slate-900">₹{fee}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenBooking(rec)}
-                              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Calendar className="h-4 w-4" /> Book Appointment
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 bg-slate-50 rounded-xl p-3.5 border border-slate-100 text-xs leading-relaxed text-slate-700">
-                          <span className="font-bold text-slate-900">Why recommended:</span> {rec.explanation}
-                        </div>
-                      </div>
+                {getRankedDoctors().length === 0 && !loadingDoctors ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center space-y-3">
+                    <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                      <Search className="h-7 w-7" />
                     </div>
-                  );
-                })}
+                    <h4 className="text-lg font-bold text-amber-900">No Matching Doctors Found</h4>
+                    <p className="text-sm text-amber-700 max-w-md mx-auto leading-relaxed">
+                      We couldn't find any registered doctors whose specialization matches your symptoms.
+                      Please try describing your symptoms differently, or consult a General Physician.
+                    </p>
+                  </div>
+                ) : (
+                  getRankedDoctors().map((rec, index) => {
+                    const docInfo = doctorDetailsMap[rec.doctorId];
+                    const docName = docInfo?.fullName || `Dr. Specialist (${rec.doctorId.slice(0, 6)})`;
+                    const docSpec = docInfo?.specialization || result.recommendedSpecialty;
+                    const fee = docInfo?.consultationFee || 500;
+                    const exp = docInfo?.experienceYears || 8;
+                    const hospital = docInfo?.hospitalName || 'Medivra Multi-Specialty Clinic';
+
+                    return (
+                      <div key={rec.doctorId} className="bg-white shadow-md rounded-2xl overflow-hidden border border-slate-200 transition-all hover:border-indigo-300 relative">
+                        <div className="absolute top-0 right-0 bg-indigo-600 text-white px-3 py-1 rounded-bl-xl font-bold text-xs shadow">
+                          #{index + 1} Match
+                        </div>
+                        <div className="p-6">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-14 h-14 bg-indigo-100 text-indigo-700 font-bold rounded-2xl flex items-center justify-center text-xl shrink-0 border border-indigo-200">
+                                {docName.replace('Dr. ', '').charAt(0)}
+                              </div>
+                              <div>
+                                <h4 className="text-lg font-bold text-slate-900">{docName}</h4>
+                                <p className="text-xs text-indigo-600 font-semibold">{docSpec} • {exp} Years Exp.</p>
+                                <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                                  <MapPin className="h-3 w-3" /> {hospital}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 sm:flex-col sm:items-end w-full sm:w-auto justify-between border-t sm:border-t-0 pt-3 sm:pt-0">
+                              <div>
+                                <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Fee</p>
+                                <p className="text-xl font-extrabold text-slate-900">₹{fee}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenBooking(rec)}
+                                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Calendar className="h-4 w-4" /> Book Appointment
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 bg-slate-50 rounded-xl p-3.5 border border-slate-100 text-xs leading-relaxed text-slate-700">
+                            <span className="font-bold text-slate-900">Why recommended:</span> {rec.explanation}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           ) : (

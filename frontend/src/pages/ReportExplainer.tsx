@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, AlertCircle, CheckCircle, Info, HelpCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { aiService, type ReportAnalysisResponse } from '../services/ai';
 
 export default function ReportExplainer() {
-  const patientId = localStorage.getItem("userId"); const [file, setFile] = useState<File | null>(null);
+  const patientId = localStorage.getItem("userId");
+  const [file, setFile] = useState<File | null>(null);
   const [reportType, setReportType] = useState<string>('Blood Test');
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<ReportAnalysisResponse | null>(null);
@@ -33,7 +34,7 @@ export default function ReportExplainer() {
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || patientId) return;
+    if (!file || !patientId) return;
 
     setAnalyzing(true);
     setError(null);
@@ -63,7 +64,7 @@ export default function ReportExplainer() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Reports Result</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Upload your medical reports and let our AI translate them into plain English.
+          Upload medical reports to view abnormal and normal test findings instantly.
         </p>
       </div>
 
@@ -117,7 +118,7 @@ export default function ReportExplainer() {
               <button
                 type="submit"
                 disabled={!file || analyzing}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
+                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400 cursor-pointer"
               >
                 {analyzing ? (
                   <>
@@ -162,93 +163,65 @@ export default function ReportExplainer() {
         <div className="lg:col-span-2">
           {result ? (
             <div className="space-y-6">
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <AlertCircle className="h-5 w-5 text-yellow-400" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-yellow-700">
-                      <strong>Disclaimer:</strong> This is an AI-generated explanation for educational purposes only. It is not a medical diagnosis. Always consult with a qualified healthcare provider for medical advice.
-                    </p>
-                  </div>
+              {/* Disclaimer & Confidence Header */}
+              <div className="bg-white shadow rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-indigo-500">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Report Findings</h3>
+                  <p className="text-xs text-gray-500">AI analysis result for {result.reportType || 'uploaded document'}</p>
                 </div>
+                <span className={`self-start sm:self-auto px-3 py-1 text-xs rounded-full font-bold ${
+                  result.confidenceLevel === 'HIGH' ? 'bg-green-100 text-green-800' :
+                  result.confidenceLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {result.confidenceLevel} Confidence
+                </span>
               </div>
 
-              <div className="bg-white shadow rounded-lg p-6">
-                <h3 className="text-xl font-medium text-gray-900 mb-4 flex items-center justify-between">
-                  Summary
-                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${result.confidenceLevel === 'HIGH' ? 'bg-green-100 text-green-800' :
-                      result.confidenceLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                    }`}>
-                    {result.confidenceLevel} Confidence
-                  </span>
-                </h3>
-                <p className="text-gray-700">{result.summaryText}</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white shadow rounded-lg p-6 border-t-4 border-red-500">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                    <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
-                    Abnormal Findings
-                  </h4>
-                  <ul className="space-y-2">
+              {/* 1. Abnormal Findings */}
+              <div className="bg-white shadow rounded-lg p-6 border-t-4 border-red-500">
+                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <AlertCircle className="h-5 w-5 text-red-500 mr-2 shrink-0" />
+                  Abnormal Findings
+                </h4>
+                {parseJsonList(result.abnormalFindings).length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No abnormal findings detected.</p>
+                ) : (
+                  <ul className="space-y-3">
                     {parseJsonList(result.abnormalFindings).map((item: string, i: number) => (
-                      <li key={i} className="text-sm text-gray-700 flex items-start">
-                        <span className="text-red-500 mr-2">•</span>
-                        {item}
+                      <li key={i} className="text-sm text-gray-800 flex items-start bg-red-50/50 p-3 rounded-lg border border-red-100">
+                        <span className="text-red-500 font-bold mr-2">•</span>
+                        <span>{item}</span>
                       </li>
                     ))}
                   </ul>
-                </div>
+                )}
+              </div>
 
-                <div className="bg-white shadow rounded-lg p-6 border-t-4 border-green-500">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                    <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-                    Normal Findings
-                  </h4>
-                  <ul className="space-y-2">
+              {/* 2. Normal Findings */}
+              <div className="bg-white shadow rounded-lg p-6 border-t-4 border-green-500">
+                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-2 shrink-0" />
+                  Normal Findings
+                </h4>
+                {parseJsonList(result.normalFindings).length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No normal findings listed.</p>
+                ) : (
+                  <ul className="space-y-3">
                     {parseJsonList(result.normalFindings).map((item: string, i: number) => (
-                      <li key={i} className="text-sm text-gray-700 flex items-start">
-                        <span className="text-green-500 mr-2">•</span>
-                        {item}
+                      <li key={i} className="text-sm text-gray-800 flex items-start bg-green-50/50 p-3 rounded-lg border border-green-100">
+                        <span className="text-green-500 font-bold mr-2">•</span>
+                        <span>{item}</span>
                       </li>
                     ))}
                   </ul>
-                </div>
+                )}
               </div>
 
-              <div className="bg-white shadow rounded-lg p-6 border-t-4 border-blue-500">
-                <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <HelpCircle className="h-5 w-5 text-blue-500 mr-2" />
-                  Suggested Questions for Your Doctor
-                </h4>
-                <ul className="space-y-3">
-                  {parseJsonList(result.suggestedQuestions).map((item: string, i: number) => (
-                    <li key={i} className="text-sm text-gray-700 flex items-start bg-blue-50 p-3 rounded-md">
-                      <span className="font-bold mr-2">Q:</span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="bg-white shadow rounded-lg p-6 border-t-4 border-indigo-500">
-                <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <Info className="h-5 w-5 text-indigo-500 mr-2" />
-                  Recommended Follow-ups
-                </h4>
-                <ul className="space-y-2">
-                  {parseJsonList(result.recommendedFollowUps).map((item: string, i: number) => (
-                    <li key={i} className="text-sm text-gray-700 flex items-start">
-                      <span className="text-indigo-500 mr-2">•</span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {/* Medical Disclaimer */}
+              <p className="text-xs text-gray-400 text-center py-2">
+                Disclaimer: AI-generated explanation for informational purposes only. Consult a physician for medical advice.
+              </p>
             </div>
           ) : (
             <div className="bg-white shadow rounded-lg p-12 text-center text-gray-500 flex flex-col items-center justify-center h-full min-h-[400px]">
