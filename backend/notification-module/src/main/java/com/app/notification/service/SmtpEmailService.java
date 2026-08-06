@@ -26,7 +26,7 @@ public class SmtpEmailService implements EmailService {
     @Override
     public void sendEmail(String to, String subject, String content) {
         if (senderEmail == null || senderEmail.isBlank()) {
-            log.error("[Email] SPRING_MAIL_USERNAME is not set in environment — cannot send email to: {}", to);
+            log.error("[Email] MAIL_FROM is not set in environment — cannot send email to: {}", to);
             return;
         }
         try {
@@ -42,8 +42,7 @@ public class SmtpEmailService implements EmailService {
                     + "<pre style=\"font-family: inherit; white-space: pre-wrap;\">" + content + "</pre>"
                     + "</body></html>";
 
-            helper.setText(content, false); // plain text fallback
-            helper.setText(htmlContent, true); // HTML version
+            helper.setText(htmlContent, true); // HTML body
 
             mailSender.send(mimeMessage);
             log.info("[Email] Successfully sent to: {} | Subject: {}", to, subject);
