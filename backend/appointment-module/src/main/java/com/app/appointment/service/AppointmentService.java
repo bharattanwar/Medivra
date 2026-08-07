@@ -332,6 +332,9 @@ public class AppointmentService {
         return mapToResponse(appointment);
     }
 
+    public List<String> getBookedSlots(UUID doctorId, LocalDate date) {
+        return appointmentRepository.findBookedSlotsByDoctorAndDate(doctorId, date);
+    }
 
     private AppointmentResponse mapToResponse(Appointment appointment) {
         AppointmentResponse response = new AppointmentResponse();
