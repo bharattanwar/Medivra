@@ -22,20 +22,19 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   };
 
   const navLinkClass = (path: string) =>
-    `px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-      location.pathname === path
-        ? 'bg-blue-600 text-white'
-        : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+    `px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === path
+      ? 'bg-blue-600 text-white'
+      : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
     }`;
 
   const homePath = token
     ? role === 'ADMIN'
       ? '/admin/dashboard'
       : isDoctor
-      ? '/dashboard'
-      : isPharmacy
-      ? '/pharmacy/dashboard'
-      : '/patient/dashboard'
+        ? '/dashboard'
+        : isPharmacy
+          ? '/pharmacy/dashboard'
+          : '/patient/dashboard'
     : '/login';
 
   return (
@@ -113,17 +112,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       </Link>
                       <Link
                         to="/patient/emergency"
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                          location.pathname === '/patient/emergency'
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/patient/emergency'
                             ? 'bg-red-600 text-white shadow-lg shadow-red-500/30'
                             : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
-                        }`}
+                          }`}
                       >
                         🚨 SOS
                       </Link>
                     </>
                   ) : null}
-                  
+
                   {/* Real-time Notification Bell Center */}
                   <div className="ml-2 mr-1">
                     <NotificationBell />
@@ -140,15 +138,30 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 <>
                   <Link
                     to="/login"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/login'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
                   >
                     Log In
                   </Link>
                   <Link
                     to="/signup"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/signup' || location.pathname === '/doctor-registration'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
                   >
                     Sign Up
+                  </Link>
+                  <Link
+                    to="/pharmacy/register"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/pharmacy/register'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                  >
+                    Pharmacy Partner
                   </Link>
                 </>
               )}

@@ -10,8 +10,8 @@ interface AuthShellProps {
 
 const AuthShell = ({ title, subtitle, children, footer }: AuthShellProps) => {
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row">
-      <div className="hidden lg:flex lg:w-[700px] lg:shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white p-8 xl:p-10 flex-col justify-between">
+    <div className="flex-1 flex flex-col lg:flex-row">
+      <div className="hidden lg:flex lg:w-[600px] lg:shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white p-8 xl:p-10 flex-col justify-between">
         <div>
           <Link to="/login" className="inline-flex items-center gap-2 mb-10">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 font-bold text-lg">
@@ -44,17 +44,6 @@ const AuthShell = ({ title, subtitle, children, footer }: AuthShellProps) => {
 
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10 bg-slate-50">
         <div className="w-full max-w-md animate-fade-in">
-          <div className="lg:hidden text-center mb-8">
-            <Link to="/login" className="inline-flex items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-lg">
-                M
-              </span>
-              <span className="text-xl font-bold text-slate-900">
-                Medi<span className="text-blue-600">vra</span>
-              </span>
-            </Link>
-          </div>
-
           <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-8">
             <div className="text-center mb-8">
               <h1 className="text-2xl font-bold text-slate-900">{title}</h1>

@@ -53,10 +53,6 @@ const Login = () => {
           <Link to="/signup" className="font-semibold text-blue-600 hover:text-blue-700">
             Sign up
           </Link>
-          <span className="mx-2 text-slate-300">·</span>
-          <Link to="/pharmacy/register" className="font-semibold text-indigo-600 hover:text-indigo-700">
-            Register Pharmacy
-          </Link>
         </>
       }
     >

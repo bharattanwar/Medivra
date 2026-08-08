@@ -230,9 +230,9 @@ const DoctorRegistration = () => {
           {formData.profileImageUrl && (
             <div className="mt-3 flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <span className="text-xs text-slate-500 font-medium">Preview:</span>
-              <img 
-                src={formData.profileImageUrl} 
-                alt="Preview" 
+              <img
+                src={formData.profileImageUrl}
+                alt="Preview"
                 className="w-12 h-12 rounded-full object-cover border-2 border-green-500 shadow-sm"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';

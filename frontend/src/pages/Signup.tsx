@@ -70,11 +70,10 @@ const Signup = () => {
             <button
               type="button"
               onClick={() => setFormData({ ...formData, role: 'PATIENT' })}
-              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
-                formData.role === 'PATIENT'
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${formData.role === 'PATIENT'
                   ? 'border-blue-600 bg-blue-50 text-blue-700'
                   : 'border-slate-200 text-slate-600 hover:border-slate-300'
-              }`}
+                }`}
             >
               <User className="h-4 w-4" />
               Patient
@@ -82,11 +81,10 @@ const Signup = () => {
             <button
               type="button"
               onClick={() => setFormData({ ...formData, role: 'DOCTOR' })}
-              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
-                formData.role === 'DOCTOR'
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${formData.role === 'DOCTOR'
                   ? 'border-green-600 bg-green-50 text-green-700'
                   : 'border-slate-200 text-slate-600 hover:border-slate-300'
-              }`}
+                }`}
             >
               <Stethoscope className="h-4 w-4" />
               Doctor
@@ -152,11 +150,10 @@ const Signup = () => {
         <button
           type="submit"
           disabled={loading}
-          className={`w-full flex items-center justify-center gap-2 text-white py-3 rounded-xl font-semibold transition-colors shadow-md disabled:opacity-60 disabled:cursor-not-allowed ${
-            formData.role === 'DOCTOR'
+          className={`w-full flex items-center justify-center gap-2 text-white py-3 rounded-xl font-semibold transition-colors shadow-md disabled:opacity-60 disabled:cursor-not-allowed ${formData.role === 'DOCTOR'
               ? 'bg-green-600 hover:bg-green-700'
               : 'bg-blue-600 hover:bg-blue-700'
-          }`}
+            }`}
         >
           <UserPlus className="h-5 w-5" />
           {loading
