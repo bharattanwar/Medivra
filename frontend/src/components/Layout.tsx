@@ -4,9 +4,34 @@ import { useWebSocket } from '../context/WebSocketContext';
 import NotificationBell from './NotificationBell';
 import { X, Calendar, CreditCard, FileText, Sparkles } from 'lucide-react';
 
+/** Returns true if a JWT token string is expired (or unparseable). */
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    // exp is in seconds
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true; // treat malformed tokens as expired
+  }
+};
+
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const token = localStorage.getItem('token');
+
+  // Auth pages should NEVER show the authenticated navbar, regardless of localStorage state
+  const AUTH_PAGES = ['/login', '/signup', '/doctor-registration', '/pharmacy/register'];
+  const isAuthPage = AUTH_PAGES.includes(location.pathname);
+
+  // Validate token: clear stale/expired tokens immediately
+  const rawToken = localStorage.getItem('token');
+  if (rawToken && isTokenExpired(rawToken)) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('userId');
+  }
+
+  // Re-read after potential cleanup
+  const token = isAuthPage ? null : localStorage.getItem('token');
   const role = localStorage.getItem('role');
   const isDoctor = role === 'DOCTOR';
   const isPharmacy = role === 'PHARMACY';
