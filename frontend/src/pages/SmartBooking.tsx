@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, MapPin, IndianRupee, Star, Activity, User, Loader2, Calendar, CheckCircle2 } from 'lucide-react';
 import { aiService, type AppointmentRecommendationResponse, type DoctorRecommendation } from '../services/ai';
 import api from '../services/api';
@@ -22,7 +22,10 @@ interface DoctorDetail {
 export default function SmartBooking() {
   const patientId = localStorage.getItem("userId");
   const navigate = useNavigate();
-  const [symptoms, setSymptoms] = useState('');
+  const location = useLocation();
+  // Pre-fill symptoms when navigated from ReportExplainer's healthcare loop
+  const prefill = (location.state as { prefillSymptoms?: string } | null)?.prefillSymptoms ?? '';
+  const [symptoms, setSymptoms] = useState(prefill);
   const [preferences, setPreferences] = useState({
     budget: 'Medium',
     gender: 'Any',
