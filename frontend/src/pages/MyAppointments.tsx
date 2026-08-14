@@ -5,6 +5,7 @@ import { processConsultationPayment } from '../components/PaymentCheckout';
 import ChatWindow from '../components/chat/ChatWindow';
 import CancelReasonModal from '../components/CancelReasonModal';
 import RescheduleModal from '../components/RescheduleModal';
+import { isAppointmentElapsed, isCancelable } from '../utils/appointmentUtils';
 
 interface Appointment {
   id: string;
@@ -167,44 +168,6 @@ const MyAppointments: React.FC = () => {
 
   const patientUserId = localStorage.getItem('userId');
 
-  const getLocalTodayString = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const isCancelable = (dateStr: string) => {
-    return dateStr > getLocalTodayString();
-  };
-
-  const isAppointmentElapsed = (dateStr: string, timeStr: string) => {
-    if (!dateStr) return false;
-    const today = getLocalTodayString();
-    if (dateStr < today) return true;
-    if (dateStr > today) return false;
-
-    // Same day, check time.
-    if (!timeStr) return false;
-    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (!match) return false;
-
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const ampm = match[3]?.toUpperCase();
-
-    if (ampm === 'PM' && hours < 12) hours += 12;
-    if (ampm === 'AM' && hours === 12) hours = 0;
-
-    const now = new Date();
-    if (now.getHours() > hours) return true;
-    if (now.getHours() === hours && now.getMinutes() > minutes) return true;
-
-    return false;
-  };
-
-
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-5xl mx-auto">
@@ -296,7 +259,7 @@ const MyAppointments: React.FC = () => {
                           📄 View Prescription
                         </button>
                         
-                        {!isAppointmentElapsed(apt.appointmentDate, apt.timeSlot) && (
+                        {!isAppointmentElapsed(apt.appointmentDate, apt.timeSlot) ? (
                           <>
                             <button
                               onClick={() => handleStartConsultation(apt)}
@@ -329,6 +292,10 @@ const MyAppointments: React.FC = () => {
                               </>
                             )}
                           </>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                            ⏰ Slot Elapsed
+                          </span>
                         )}
                       </div>
                     )}

@@ -5,6 +5,7 @@ import UploadPrescriptionModal from '../components/UploadPrescriptionModal';
 import ChatWindow from '../components/chat/ChatWindow';
 import CancelReasonModal from '../components/CancelReasonModal';
 import RescheduleModal from '../components/RescheduleModal';
+import { isAppointmentElapsed, isCancelable } from '../utils/appointmentUtils';
 
 interface Appointment {
   id: string;
@@ -126,18 +127,6 @@ const DoctorAppointments: React.FC = () => {
 
   const doctorUserId = localStorage.getItem('userId');
 
-  const getLocalTodayString = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const isCancelable = (dateStr: string) => {
-    return dateStr > getLocalTodayString();
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-6xl mx-auto">
@@ -195,40 +184,56 @@ const DoctorAppointments: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
                     {apt.status === 'CONFIRMED' && (
                       <>
-                        <button 
-                          onClick={() => handleStartConsultation(apt)}
-                          className="flex-1 lg:flex-initial h-9 bg-green-600 hover:bg-green-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
-                        >
-                          💬 Start Consultation
-                        </button>
-                        {apt.consultationType !== 'IN_CLINIC' && (
-                          <button 
-                            onClick={() => navigate(`/consultation/${apt.id}`)}
-                            className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
-                          >
-                            📹 Join Video Call
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => setSelectedAppointment(apt)}
-                          className="flex-1 lg:flex-initial h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
-                        >
-                          📤 Upload Prescription
-                        </button>
-                        {isCancelable(apt.appointmentDate) && (
+                        {!isAppointmentElapsed(apt.appointmentDate, apt.timeSlot) ? (
                           <>
                             <button 
-                              onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
-                              className="flex-1 lg:flex-initial h-9 bg-white border border-blue-200 text-blue-600 px-4 rounded-xl font-semibold hover:bg-blue-50 transition-all flex items-center justify-center text-xs gap-1"
+                              onClick={() => handleStartConsultation(apt)}
+                              className="flex-1 lg:flex-initial h-9 bg-green-600 hover:bg-green-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
                             >
-                              📅 Reschedule
+                              💬 Start Consultation
                             </button>
+                            {apt.consultationType !== 'IN_CLINIC' && (
+                              <button 
+                                onClick={() => navigate(`/consultation/${apt.id}`)}
+                                className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                              >
+                                📹 Join Video Call
+                              </button>
+                            )}
                             <button 
-                              onClick={() => setCancelModalApt({ id: apt.id, mode: 'cancel' })}
-                              className="flex-1 lg:flex-initial h-9 bg-white border border-red-200 text-red-600 px-4 rounded-xl font-semibold hover:bg-red-50 transition-all flex items-center justify-center text-xs gap-1"
+                              onClick={() => setSelectedAppointment(apt)}
+                              className="flex-1 lg:flex-initial h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
                             >
-                              🚫 Cancel
+                              📤 Upload Prescription
                             </button>
+                            {isCancelable(apt.appointmentDate) && (
+                              <>
+                                <button 
+                                  onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
+                                  className="flex-1 lg:flex-initial h-9 bg-white border border-blue-200 text-blue-600 px-4 rounded-xl font-semibold hover:bg-blue-50 transition-all flex items-center justify-center text-xs gap-1"
+                                >
+                                  📅 Reschedule
+                                </button>
+                                <button 
+                                  onClick={() => setCancelModalApt({ id: apt.id, mode: 'cancel' })}
+                                  className="flex-1 lg:flex-initial h-9 bg-white border border-red-200 text-red-600 px-4 rounded-xl font-semibold hover:bg-red-50 transition-all flex items-center justify-center text-xs gap-1"
+                                >
+                                  🚫 Cancel
+                                </button>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => setSelectedAppointment(apt)}
+                              className="flex-1 lg:flex-initial h-9 bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                            >
+                              📤 Upload Prescription
+                            </button>
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                              ⏰ Slot Elapsed
+                            </span>
                           </>
                         )}
                       </>
@@ -236,7 +241,7 @@ const DoctorAppointments: React.FC = () => {
 
                     {apt.status === 'PENDING' && (
                       <>
-                        {isCancelable(apt.appointmentDate) && (
+                        {!isAppointmentElapsed(apt.appointmentDate, apt.timeSlot) && isCancelable(apt.appointmentDate) && (
                           <button 
                             onClick={() => setRescheduleModalApt({ id: apt.id, doctorId: apt.doctorId, doctorName: apt.doctorName })}
                             className="flex-1 lg:flex-initial h-9 bg-white border border-blue-200 text-blue-600 px-4 rounded-xl font-semibold hover:bg-blue-50 transition-all flex items-center justify-center text-xs gap-1"

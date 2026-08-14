@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Volume2
 } from 'lucide-react';
+import { isAppointmentElapsed } from '../utils/appointmentUtils';
 
 interface AppointmentDetails {
   id: string;
@@ -59,6 +60,17 @@ const ConsultationRoom: React.FC = () => {
         const response = await api.get(`/appointments/${appointmentId}`);
         const data = response.data;
         setAppointment(data);
+
+        if (
+          data.status === 'COMPLETED' ||
+          data.status === 'CANCELLED' ||
+          data.status === 'REJECTED' ||
+          isAppointmentElapsed(data.appointmentDate, data.timeSlot)
+        ) {
+          setErrorMsg('This consultation slot has elapsed or is no longer active.');
+          setConnectionStatus('disconnected');
+          return;
+        }
 
         const currentUserId = localStorage.getItem('userId');
         if (currentUserId === data.patientId) {
