@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
@@ -42,6 +42,10 @@ interface WebSocketProviderProps {
 }
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
+  // Reactive token state — drives the WebSocket connection lifecycle.
+  // Initialised from localStorage so a page refresh reconnects immediately.
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+
   const [client, setClient] = useState<Client | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
@@ -52,7 +56,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [sosUpdate, setSosUpdate] = useState<any | null>(null);
   const clientRef = useRef<Client | null>(null);
 
-  const fetchNotifications = async () => {
+  // Listen for the custom 'auth:changed' event dispatched by Login / Logout.
+  // This lets us react to auth transitions without a page refresh.
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setToken(localStorage.getItem('token'));
+    };
+    window.addEventListener('auth:changed', handleAuthChange);
+    return () => window.removeEventListener('auth:changed', handleAuthChange);
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
     try {
       const response = await api.get('/notifications');
       setNotifications(response.data.data || []);
@@ -62,7 +76,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     }
-  };
+  }, []);
 
   const markAsRead = async (id: string) => {
     try {
@@ -96,11 +110,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  // Re-run whenever `token` changes (login → connect, logout → disconnect).
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      // No token — ensure any lingering client is torn down.
+      if (clientRef.current) {
+        clientRef.current.deactivate();
+        clientRef.current = null;
+        setClient(null);
+        setIsConnected(false);
+      }
+      return;
+    }
 
-    // Load initial notifications
+    // Token present — load notifications and open the WebSocket.
     fetchNotifications();
 
     const stompClient = new Client({
@@ -160,9 +183,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
     return () => {
       stompClient.deactivate();
+      clientRef.current = null;
       setIsConnected(false);
     };
-  }, []);
+  }, [token, fetchNotifications]);
 
   const sendMessage = (destination: string, body: any) => {
     if (clientRef.current && isConnected) {

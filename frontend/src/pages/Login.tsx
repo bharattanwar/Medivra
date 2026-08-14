@@ -23,6 +23,10 @@ const Login = () => {
       localStorage.setItem('role', role);
       localStorage.setItem('userId', userId);
 
+      // Notify WebSocketContext to open the connection immediately,
+      // without requiring a page refresh.
+      window.dispatchEvent(new Event('auth:changed'));
+
       if (role === 'ADMIN') {
         navigate('/admin/dashboard');
       } else if (role === 'DOCTOR') {

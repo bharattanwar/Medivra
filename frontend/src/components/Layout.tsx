@@ -43,6 +43,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
     localStorage.removeItem('userId');
+    // Signal WebSocketContext to disconnect immediately.
+    window.dispatchEvent(new Event('auth:changed'));
     window.location.replace('/login');
   };
 
