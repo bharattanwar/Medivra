@@ -313,14 +313,20 @@ const PharmacyFinder: React.FC = () => {
       await new Promise(r => setTimeout(r, 400));
 
       if (aiRes && aiRes.medicines) {
-        const items = aiRes.medicines.map((m) => ({
-          name: m.matchedMedicineName || m.extractedName,
-          strength: '',
-          dosage: m.dosage || '1 tablet',
-          frequency: m.frequency || '1-0-1',
-          duration: m.duration || '5 days',
-          quantity: m.quantity || 10
-        }));
+        const items = aiRes.medicines.map((m) => {
+          let name = m.matchedMedicineName || m.extractedName;
+          if (m.extractedName && m.matchedMedicineName && m.extractedName.toLowerCase() !== m.matchedMedicineName.toLowerCase()) {
+            name = `${m.extractedName} - ${m.matchedMedicineName}`;
+          }
+          return {
+            name,
+            strength: '',
+            dosage: m.dosage || '1 tablet',
+            frequency: m.frequency || '1-0-1',
+            duration: m.duration || '5 days',
+            quantity: m.quantity || 10
+          };
+        });
         setIdentifiedItems(items);
         setUploadFile(null);
         setUploadNotes('');
@@ -1144,50 +1150,60 @@ const PharmacyFinder: React.FC = () => {
                       </h3>
                     </div>
 
-                    <div className="p-4 divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                      {identifiedItems.map((item, idx) => (
-                        <div key={idx} className="py-3 flex flex-col gap-1.5">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-xs font-bold text-slate-800">{item.name}</p>
-                              <p className="text-[10px] text-slate-400">
-                                {item.strength && `${item.strength} · `}{item.dosage} · {item.frequency} · {item.duration}
-                              </p>
+                    <div className="p-3 space-y-2 max-h-80 overflow-y-auto">
+                      {identifiedItems.map((item, idx) => {
+                        const displayName = item.strength ? `${item.name} - ${item.strength}` : item.name;
+                        return (
+                          <div key={idx} className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                                💊
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 truncate leading-snug">{displayName}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] text-slate-500 font-medium">
+                                  {item.dosage && <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">{item.dosage}</span>}
+                                  {item.frequency && <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">{item.frequency}</span>}
+                                  {item.duration && <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">{item.duration}</span>}
+                                </div>
+                              </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setIdentifiedItems(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-slate-300 hover:text-red-500 cursor-pointer"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1 justify-end">
-                            <label className="text-[10px] text-slate-500 font-bold">Qty to order:</label>
-                            <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg p-0.5">
+
+                            <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+                              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-400 mr-0.5">Qty:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 5) } : it));
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </button>
+                                <span className="w-5 text-center text-xs font-black text-slate-800">{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 5 } : it));
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              </div>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 5) } : it));
-                                }}
-                                className="p-1 rounded bg-white text-slate-500"
+                                onClick={() => setIdentifiedItems(prev => prev.filter((_, i) => i !== idx))}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title="Remove medicine"
                               >
-                                <Minus className="h-3 w-3" />
-                              </button>
-                              <span className="w-6 text-center text-[11px] font-bold text-slate-700">{item.quantity}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 5 } : it));
-                                }}
-                                className="p-1 rounded bg-white text-slate-500"
-                              >
-                                <Plus className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {matchError && (
