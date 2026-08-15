@@ -157,6 +157,27 @@ public class ReportAnalysisService {
         }).collect(Collectors.toList());
     }
 
+    @Transactional
+    public void deleteReport(UUID reportId) {
+        MedicalReport report = medicalReportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
+
+        // Delete summary first to respect constraints
+        summaryRepository.findByReportId(reportId).ifPresent(summaryRepository::delete);
+
+        // Delete local file
+        if (report.getFilePath() != null) {
+            try {
+                java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("uploads").resolve(report.getFilePath()));
+            } catch (Exception e) {
+                // Ignore file system delete failures so DB transaction succeeds
+            }
+        }
+
+        // Delete medical report entity
+        medicalReportRepository.delete(report);
+    }
+
     private ReportAnalysisResponse mapToResponse(MedicalReport report, AiReportSummary summary) {
         ReportAnalysisResponse response = new ReportAnalysisResponse();
         response.setReportId(report.getId());

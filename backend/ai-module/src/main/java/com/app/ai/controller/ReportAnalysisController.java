@@ -43,4 +43,10 @@ public class ReportAnalysisController {
     public ResponseEntity<List<ReportAnalysisResponse>> getReportsByPatient(@PathVariable UUID patientId) {
         return ResponseEntity.ok(reportAnalysisService.getReportsByPatient(patientId));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteReport(@PathVariable UUID id) {
+        reportAnalysisService.deleteReport(id);
+        return ResponseEntity.ok().build();
+    }
 }

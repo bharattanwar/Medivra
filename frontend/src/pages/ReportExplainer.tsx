@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Upload, FileText, AlertTriangle, CheckCircle2, ArrowRight, Loader2,
   ChevronDown, ChevronUp, Brain, Stethoscope, ShoppingBag,
-  Activity, Sparkles, ClipboardList, HelpCircle, Clock, RefreshCw, X
+  Activity, Sparkles, ClipboardList, HelpCircle, Clock, RefreshCw, X, Trash2
 } from 'lucide-react';
 import { aiService, type ReportAnalysisResponse } from '../services/ai';
 
@@ -103,6 +103,23 @@ export default function ReportExplainer() {
       setHistory(data);
     } catch (err) {
       console.error('Failed to load history', err);
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this report from your history?")) {
+      return;
+    }
+    try {
+      await aiService.deleteReport(reportId);
+      setHistory(prev => prev.filter(r => r.reportId !== reportId));
+      if (result?.reportId === reportId) {
+        setResult(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete report', err);
+      alert('Failed to delete report. Please try again.');
     }
   };
 
@@ -287,28 +304,39 @@ export default function ReportExplainer() {
                   <p className="text-xs text-slate-400 text-center py-6">No previous analyses yet.</p>
                 )}
                 {history.map((item) => (
-                  <button
+                  <div
                     key={item.reportId}
-                    onClick={() => { setResult(item); setLoopBannerVisible(false); setTimeout(() => setLoopBannerVisible(true), 600); }}
-                    className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${
-                      result?.reportId === item.reportId
-                        ? 'bg-blue-50 border border-blue-200'
-                        : 'hover:bg-slate-50 border border-transparent'
-                    }`}
+                    className="group relative flex items-center"
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      result?.reportId === item.reportId ? 'bg-blue-100' : 'bg-slate-100'
-                    }`}>
-                      <FileText className={`w-4 h-4 ${result?.reportId === item.reportId ? 'text-blue-600' : 'text-slate-400'}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{item.reportType}</p>
-                      <p className="text-xs text-slate-400">
-                        {new Date(item.analyzedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  </button>
+                    <button
+                      onClick={() => { setResult(item); setLoopBannerVisible(false); setTimeout(() => setLoopBannerVisible(true), 600); }}
+                      className={`flex-1 text-left flex items-center gap-3 p-3 rounded-xl transition-all mr-8 border cursor-pointer ${
+                        result?.reportId === item.reportId
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'hover:bg-slate-50 border-transparent'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        result?.reportId === item.reportId ? 'bg-blue-100' : 'bg-slate-100'
+                      }`}>
+                        <FileText className={`w-4 h-4 ${result?.reportId === item.reportId ? 'text-blue-600' : 'text-slate-400'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{item.reportType}</p>
+                        <p className="text-xs text-slate-400">
+                          {new Date(item.analyzedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteReport(item.reportId, e)}
+                      className="absolute right-2 p-2 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer shrink-0"
+                      title="Delete analysis history"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

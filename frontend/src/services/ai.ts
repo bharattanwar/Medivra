@@ -95,6 +95,10 @@ export const aiService = {
         const response = await api.get<ReportAnalysisResponse[]>(`/ai/reports/patient/${patientId}`);
         return response.data;
     },
+    deleteReport: async (id: string) => {
+        const response = await api.delete(`/ai/reports/${id}`);
+        return response.data;
+    },
 
     // 1.5 Prescription OCR
     extractPrescription: async (patientId: string, file: File) => {
