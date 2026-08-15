@@ -47,20 +47,43 @@ public class MedicineController {
             if (item.getName() == null || item.getName().isBlank()) {
                 throw new RuntimeException("Medicine name is required");
             }
-            List<Medicine> existingList = medicineRepository.findByNameContainingIgnoreCase(item.getName());
+            String searchName = item.getName().trim();
+            List<Medicine> existingList = medicineRepository.findByNameContainingIgnoreCase(searchName);
+            
+            // 1. Exact match
             java.util.Optional<Medicine> exactMatch = existingList.stream()
-                    .filter(m -> m.getName().equalsIgnoreCase(item.getName().trim()))
+                    .filter(m -> m.getName().equalsIgnoreCase(searchName))
                     .findFirst();
 
             Medicine medicine;
             if (exactMatch.isPresent()) {
                 medicine = exactMatch.get();
+            } else if (!existingList.isEmpty()) {
+                // 2. Partial match (e.g. "Vitamin D" -> "Vitamin D3 60K")
+                medicine = existingList.get(0);
             } else {
-                medicine = new Medicine();
-                medicine.setName(item.getName().trim());
-                medicine.setStrength(item.getStrength());
-                medicine.setManufacturer("Generic");
-                medicine = medicineRepository.save(medicine);
+                // 3. Search individual token keywords
+                String[] words = searchName.split("\\s+");
+                Medicine keywordMatch = null;
+                for (String word : words) {
+                    if (word.length() > 2) {
+                        List<Medicine> kwList = medicineRepository.findByNameContainingIgnoreCase(word);
+                        if (!kwList.isEmpty()) {
+                            keywordMatch = kwList.get(0);
+                            break;
+                        }
+                    }
+                }
+                if (keywordMatch != null) {
+                    medicine = keywordMatch;
+                } else {
+                    // 4. Create new entry only if completely unknown
+                    medicine = new Medicine();
+                    medicine.setName(searchName);
+                    medicine.setStrength(item.getStrength());
+                    medicine.setManufacturer("Generic");
+                    medicine = medicineRepository.save(medicine);
+                }
             }
             return toResponse(medicine);
         }).collect(Collectors.toList());

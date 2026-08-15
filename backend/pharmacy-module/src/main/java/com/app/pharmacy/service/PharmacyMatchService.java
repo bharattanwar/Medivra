@@ -91,7 +91,7 @@ public class PharmacyMatchService {
     public PharmacyMatchResult matchPharmacies(PharmacyMatchRequest request) {
         double userLat = request.getUserLatitude();
         double userLng = request.getUserLongitude();
-        double radiusKm = request.getRadiusKm() != null ? request.getRadiusKm() : 5.0;
+        double radiusKm = request.getRadiusKm() != null ? request.getRadiusKm() : 25.0;
 
         // Build a map of requested medicineId -> quantity needed
         Map<UUID, Integer> needed = new HashMap<>();
