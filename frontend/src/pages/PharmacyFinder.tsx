@@ -83,6 +83,23 @@ interface IdentifiedItem {
 type Tab = 'nearby' | 'match';
 type MatchMode = 'prescription' | 'manual';
 type PrescriptionSource = 'select' | 'upload';
+const extractSearchQuery = (finding: string): string | null => {
+  if (!finding) return null;
+  const lower = finding.toLowerCase();
+
+  if (lower.includes('vitamin d') || lower.includes('d3') || lower.includes('cholecalciferol')) return 'Vitamin D';
+  if (lower.includes('vitamin b12') || lower.includes('b12') || lower.includes('cyanocobalamin')) return 'Vitamin B12';
+  if (lower.includes('hemoglobin') || lower.includes('iron') || lower.includes('ferritin') || lower.includes('anemia') || lower.includes('rbc')) return 'Iron';
+  if (lower.includes('calcium')) return 'Calcium';
+  if (lower.includes('cholesterol') || lower.includes('lipid') || lower.includes('triglyceride')) return 'Omega';
+  if (lower.includes('thyroid') || lower.includes('tsh')) return 'Thyroid';
+  if (lower.includes('glucose') || lower.includes('hba1c') || lower.includes('sugar') || lower.includes('diabetes')) return 'Metformin';
+
+  // Clean parameter string
+  const clean = finding.replace(/[\d.,()%/:<>-]+/g, ' ').trim();
+  const words = clean.split(/\s+/).filter(w => w.length > 2 && !['low', 'high', 'abnormal', 'deficiency', 'level', 'test', 'result', 'normal', 'positive', 'negative'].includes(w.toLowerCase()));
+  return words[0] || (clean.length > 2 ? clean : null);
+};
 
 
 
@@ -160,7 +177,41 @@ const PharmacyFinder: React.FC = () => {
       setBasket(items);
     } else if (location.state?.reportFindings && location.state.reportFindings.length > 0) {
       setActiveTab('match');
-      setMatchMode('prescription');
+      setMatchMode('manual');
+
+      // Auto-search database for medicines matching report findings
+      const autoMatchFindings = async () => {
+        const matchedBasket: { medicineId: string; medicineName: string; quantity: number }[] = [];
+        const addedIds = new Set<string>();
+
+        for (const finding of location.state.reportFindings) {
+          const queryTerm = extractSearchQuery(finding);
+          if (!queryTerm) continue;
+          try {
+            const res = await api.get(`/medicines/search?q=${encodeURIComponent(queryTerm)}`);
+            if (res.data?.success && res.data.data && res.data.data.length > 0) {
+              const dbMed = res.data.data[0];
+              if (!addedIds.has(dbMed.id)) {
+                addedIds.add(dbMed.id);
+                matchedBasket.push({
+                  medicineId: dbMed.id,
+                  medicineName: dbMed.name,
+                  quantity: 10
+                });
+              }
+            }
+          } catch (err) {
+            console.error('Error auto-resolving finding:', finding, err);
+          }
+        }
+
+        // If matching medicines were found in DB, auto-populate manual basket!
+        if (matchedBasket.length > 0) {
+          setBasket(matchedBasket);
+        }
+      };
+
+      autoMatchFindings();
     }
   }, [location.state]);
 
