@@ -84,6 +84,38 @@ type Tab = 'nearby' | 'match';
 type MatchMode = 'prescription' | 'manual';
 type PrescriptionSource = 'select' | 'upload';
 
+const mapFindingsToRecommendations = (findings: string[] = []) => {
+  const recommendations: { name: string; reason: string; quantity: number }[] = [];
+  const text = findings.join(' ').toLowerCase();
+
+  if (text.includes('hemoglobin') || text.includes('iron') || text.includes('anemia') || text.includes('ferritin') || text.includes('rbc')) {
+    recommendations.push({ name: 'Iron & Folic Acid Supplement', reason: 'For Low Hemoglobin / Iron Deficiency', quantity: 30 });
+  }
+  if (text.includes('vitamin d') || text.includes('d3') || text.includes('cholecalciferol') || text.includes('calcium')) {
+    recommendations.push({ name: 'Vitamin D3 60,000 IU', reason: 'For Vitamin D / Bone Density Support', quantity: 4 });
+  }
+  if (text.includes('vitamin b12') || text.includes('b12') || text.includes('cyanocobalamin') || text.includes('nerve')) {
+    recommendations.push({ name: 'Neurobion Forte / Vitamin B12', reason: 'For B12 Deficiency & Nerve Support', quantity: 30 });
+  }
+  if (text.includes('cholesterol') || text.includes('lipid') || text.includes('triglyceride') || text.includes('hdl') || text.includes('ldl')) {
+    recommendations.push({ name: 'Omega-3 Fish Oil 1000mg', reason: 'For Heart Health & Lipid Balance', quantity: 30 });
+  }
+  if (text.includes('glucose') || text.includes('sugar') || text.includes('hba1c') || text.includes('diabetes')) {
+    recommendations.push({ name: 'Diabetic Health Support Supplement', reason: 'For Blood Sugar Management', quantity: 30 });
+  }
+  if (text.includes('thyroid') || text.includes('tsh') || text.includes('t3') || text.includes('t4')) {
+    recommendations.push({ name: 'Thyroid Health Support Supplement', reason: 'For Thyroid Function Support', quantity: 30 });
+  }
+
+  // Fallback if no specific keyword matched but findings exist
+  if (recommendations.length === 0 && findings.length > 0) {
+    recommendations.push({ name: 'Multivitamin & Mineral Complex', reason: 'Nutritional support based on report findings', quantity: 30 });
+    recommendations.push({ name: 'Vitamin C 500mg Immunity Booster', reason: 'Immunity & antioxidant support', quantity: 20 });
+  }
+
+  return recommendations;
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 
@@ -145,7 +177,7 @@ const PharmacyFinder: React.FC = () => {
 
   const patientId = localStorage.getItem('userId');
 
-  // Listen for prefilled items passed from Rx Scanner
+  // Listen for prefilled items passed from Rx Scanner or Report Explainer
   useEffect(() => {
     if (location.state?.prefilledItems && location.state.prefilledItems.length > 0) {
       setActiveTab('match');
@@ -154,6 +186,16 @@ const PharmacyFinder: React.FC = () => {
         medicineId: item.medicineId || `med_${idx}_${Date.now()}`,
         medicineName: item.medicineName,
         quantity: item.quantity || 10
+      }));
+      setBasket(items);
+    } else if (location.state?.reportFindings && location.state.reportFindings.length > 0) {
+      setActiveTab('match');
+      setMatchMode('manual');
+      const recs = mapFindingsToRecommendations(location.state.reportFindings);
+      const items = recs.map((rec, idx) => ({
+        medicineId: `rec_${idx}_${Date.now()}`,
+        medicineName: rec.name,
+        quantity: rec.quantity
       }));
       setBasket(items);
     }
@@ -844,7 +886,44 @@ const PharmacyFinder: React.FC = () => {
 
         {/* ── SMART MATCH TAB ────────────────────────────────────────────────── */}
         {activeTab === 'match' && (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="space-y-6">
+            {location.state?.reportFindings && location.state.reportFindings.length > 0 && (
+              <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-indigo-950 rounded-3xl p-6 shadow-xl border border-emerald-500/30 text-white animate-fade-in">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
+                      AI Report Recommendations · {location.state.reportType || 'Medical Report'}
+                    </span>
+                  </div>
+                  <span className="text-xs font-semibold text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30">
+                    Auto-Loaded to Basket
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">
+                  Recommended Remedies & Supplements for Your Findings
+                </h3>
+                <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+                  Based on detected findings in your medical report, our AI mapped these target supplements to your medicine basket:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {mapFindingsToRecommendations(location.state.reportFindings).map((rec, idx) => (
+                    <div key={idx} className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 border border-white/10 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-white">{rec.name}</p>
+                        <p className="text-[11px] text-emerald-300 mt-0.5">{rec.reason}</p>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                        Qty: {rec.quantity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             
             {/* Left Column — Selection, Upload or Manual Addition */}
             <div className="lg:col-span-2 space-y-5">
@@ -1481,10 +1560,11 @@ const PharmacyFinder: React.FC = () => {
               )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 export default PharmacyFinder;

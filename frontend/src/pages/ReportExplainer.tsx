@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, FileText, AlertTriangle, CheckCircle2, ArrowRight, Loader2,
-  ChevronDown, ChevronUp, Brain, Stethoscope, ShoppingBag, Calendar,
+  ChevronDown, ChevronUp, Brain, Stethoscope, ShoppingBag,
   Activity, Sparkles, ClipboardList, HelpCircle, Clock, RefreshCw, X
 } from 'lucide-react';
 import { aiService, type ReportAnalysisResponse } from '../services/ai';
@@ -141,6 +141,18 @@ export default function ReportExplainer() {
       ? `Based on my ${result.reportType} report, I have these abnormal findings: ${abnormals.slice(0, 4).join('; ')}.`
       : `I need a consultation after reviewing my ${result.reportType} report.`;
     navigate('/patient/ai/booking', { state: { prefillSymptoms: context } });
+  };
+
+  const handleOrderMedicines = () => {
+    if (!result) return;
+    const abnormals = parseList(result.abnormalFindings);
+    navigate('/patient/pharmacy', {
+      state: {
+        reportFindings: abnormals,
+        reportType: result.reportType,
+        summary: result.summaryText
+      }
+    });
   };
 
   /* ── derived data ── */
@@ -531,61 +543,33 @@ export default function ReportExplainer() {
                         </p>
                       )}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <button
                           onClick={handleBookDoctor}
-                          className="group flex items-center gap-4 bg-blue-600 hover:bg-blue-500 rounded-xl px-5 py-4 transition-all duration-200 shadow-lg shadow-blue-900/40 cursor-pointer"
+                          className="group flex items-center gap-4 bg-blue-600 hover:bg-blue-500 rounded-2xl p-5 transition-all duration-200 shadow-xl shadow-blue-950/50 border border-blue-500/30 cursor-pointer"
                         >
-                          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                            <Stethoscope className="w-5 h-5 text-white" />
+                          <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
+                            <Stethoscope className="w-6 h-6 text-white" />
                           </div>
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-white">Book a Doctor</p>
-                            <p className="text-xs text-blue-200 mt-0.5">AI finds the right specialist for your findings</p>
+                          <div className="text-left flex-1 min-w-0">
+                            <p className="text-base font-bold text-white">Book a Doctor</p>
+                            <p className="text-xs text-blue-200 mt-0.5 leading-relaxed">AI finds the right specialist for your report findings</p>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-blue-300 ml-auto shrink-0 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="w-5 h-5 text-blue-300 shrink-0 group-hover:translate-x-1 transition-transform" />
                         </button>
 
                         <button
-                          onClick={() => navigate('/patient/pharmacy')}
-                          className="group flex items-center gap-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl px-5 py-4 transition-all duration-200 shadow-lg shadow-emerald-900/40 cursor-pointer"
+                          onClick={handleOrderMedicines}
+                          className="group flex items-center gap-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl p-5 transition-all duration-200 shadow-xl shadow-emerald-950/50 border border-emerald-500/30 cursor-pointer"
                         >
-                          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                            <ShoppingBag className="w-5 h-5 text-white" />
+                          <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
+                            <ShoppingBag className="w-6 h-6 text-white" />
                           </div>
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-white">Order Medicines</p>
-                            <p className="text-xs text-emerald-200 mt-0.5">Browse & order from nearby pharmacies</p>
+                          <div className="text-left flex-1 min-w-0">
+                            <p className="text-base font-bold text-white">Order Medicines</p>
+                            <p className="text-xs text-emerald-200 mt-0.5 leading-relaxed">Order recommended medicines & supplements based on report deficiencies</p>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-emerald-300 ml-auto shrink-0 group-hover:translate-x-1 transition-transform" />
-                        </button>
-
-                        <button
-                          onClick={() => navigate('/patient/appointments')}
-                          className="group flex items-center gap-4 bg-slate-700 hover:bg-slate-600 rounded-xl px-5 py-4 transition-all duration-200 cursor-pointer"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                            <Calendar className="w-5 h-5 text-white" />
-                          </div>
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-white">My Appointments</p>
-                            <p className="text-xs text-slate-400 mt-0.5">View your upcoming & past visits</p>
-                          </div>
-                          <ArrowRight className="w-4 h-4 text-slate-500 ml-auto shrink-0 group-hover:translate-x-1 transition-transform" />
-                        </button>
-
-                        <button
-                          onClick={() => navigate('/patient/ai/prescriptions')}
-                          className="group flex items-center gap-4 bg-slate-700 hover:bg-slate-600 rounded-xl px-5 py-4 transition-all duration-200 cursor-pointer"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                            <FileText className="w-5 h-5 text-white" />
-                          </div>
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-white">Scan Prescription</p>
-                            <p className="text-xs text-slate-400 mt-0.5">AI extracts medicines from your prescription</p>
-                          </div>
-                          <ArrowRight className="w-4 h-4 text-slate-500 ml-auto shrink-0 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="w-5 h-5 text-emerald-300 shrink-0 group-hover:translate-x-1 transition-transform" />
                         </button>
                       </div>
                     </div>
