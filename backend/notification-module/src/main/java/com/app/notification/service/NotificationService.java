@@ -6,6 +6,8 @@ import com.app.notification.entity.Notification;
 import com.app.notification.repository.NotificationRepository;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,8 +16,16 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service responsible for creating, persisting, and dispatching in-app notifications.
+ *
+ * It persists notifications to the database and dispatches live updates to users
+ * connected via WebSocket (STOMP user queues).
+ */
 @Service
 public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
@@ -29,6 +39,10 @@ public class NotificationService {
         this.messagingTemplate = messagingTemplate;
     }
 
+    /**
+     * Creates a new notification record in the database and pushes it to the recipient's
+     * WebSocket queue for real-time delivery.
+     */
     @Transactional
     public NotificationResponse createNotification(UUID recipientId, String title, String message,
                                                    NotificationType type, String relatedEntityId) {
@@ -54,12 +68,16 @@ public class NotificationService {
                     response
             );
         } catch (Exception e) {
-            System.err.println("Failed to send WebSocket notification: " + e.getMessage());
+            log.warn("Failed to send WebSocket notification to {}: {}", recipient.getEmail(), e.getMessage());
         }
 
         return response;
     }
 
+    /**
+     * Retrieves all notifications for a specific user ordered by creation time descending.
+     */
+    @Transactional(readOnly = true)
     public List<NotificationResponse> getNotificationsForUser(UUID userId) {
         return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId)
                 .stream()
@@ -67,10 +85,17 @@ public class NotificationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Gets the count of unread notifications for a user.
+     */
+    @Transactional(readOnly = true)
     public long getUnreadCount(UUID userId) {
         return notificationRepository.countByRecipientIdAndIsReadFalse(userId);
     }
 
+    /**
+     * Marks a specific notification as read after validating that the user is the recipient.
+     */
     @Transactional
     public void markAsRead(UUID notificationId, UUID userId) {
         Notification notification = notificationRepository.findById(notificationId)
@@ -84,17 +109,12 @@ public class NotificationService {
         notificationRepository.save(notification);
     }
 
+    /**
+     * Marks all unread notifications for a user as read using a single bulk SQL update.
+     */
     @Transactional
     public void markAllAsRead(UUID userId) {
-        List<Notification> unread = notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .filter(n -> !n.isRead())
-                .collect(Collectors.toList());
-
-        for (Notification n : unread) {
-            n.setRead(true);
-        }
-        notificationRepository.saveAll(unread);
+        notificationRepository.markAllAsReadByRecipientId(userId);
     }
 
     private NotificationResponse mapToResponse(Notification notification) {

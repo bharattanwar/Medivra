@@ -7,22 +7,34 @@ import com.app.ai.entity.MedicalReport;
 import com.app.ai.repository.AiReportSummaryRepository;
 import com.app.ai.repository.MedicalReportRepository;
 import com.app.record.service.FileStorageService;
+import com.app.common.event.NotificationEvent;
+import com.app.common.entity.NotificationType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import com.app.common.event.NotificationEvent;
-import com.app.common.entity.NotificationType;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Handles AI-powered analysis of uploaded medical reports (PDFs and images).
+ *
+ * Flow:
+ *   1. Save the uploaded file to disk via FileStorageService.
+ *   2. Extract text (PDF) or send the raw image bytes (image) to Gemini.
+ *   3. Parse the JSON response and persist an AiReportSummary.
+ *   4. Return a response DTO the frontend can display directly.
+ *
+ * PDFs have text extracted first so the LLM gets clean, structured input.
+ * Images are sent inline as base-64 for Gemini's vision model.
+ */
 @Service
 public class ReportAnalysisService {
 
@@ -49,97 +61,55 @@ public class ReportAnalysisService {
     @Transactional
     public ReportAnalysisResponse analyzeReport(ReportAnalysisRequest request) {
         MultipartFile file = request.getFile();
-        String originalFilename = file.getOriginalFilename();
         String contentType = file.getContentType();
 
-        // 1. Save file
+        // 1. Persist the file and record metadata
         String filePath = fileStorageService.save(file);
 
-        // 2. Create MedicalReport entity
         MedicalReport report = new MedicalReport();
         report.setPatientId(request.getPatientId());
         report.setReportType(request.getReportType());
         report.setFilePath(filePath);
         report.setFileType(contentType);
-        report.setOriginalFileName(originalFilename);
+        report.setOriginalFileName(file.getOriginalFilename());
         report = medicalReportRepository.save(report);
 
-        // 3. Extract text/data
-        String extractedText = "";
-        String aiResponse = "";
         try {
-            if (contentType != null && contentType.equals("application/pdf")) {
-                extractedText = extractTextFromPdf(file.getInputStream());
-                aiResponse = callGeminiForText(extractedText, request.getReportType(), request.getPatientId());
+            // 2. Call Gemini — different path for PDF vs image
+            String aiResponse;
+            if ("application/pdf".equals(contentType)) {
+                String text = extractTextFromPdf(file.getInputStream());
+                aiResponse = callGeminiForText(text, request.getReportType(), request.getPatientId());
             } else if (contentType != null && contentType.startsWith("image/")) {
-                aiResponse = callGeminiForImage(file.getBytes(), contentType, request.getReportType(), request.getPatientId());
+                aiResponse = callGeminiForImage(
+                        file.getBytes(), contentType,
+                        request.getReportType(), request.getPatientId());
             } else {
                 throw new RuntimeException("Unsupported file type: " + contentType);
             }
 
-            // 4. Parse AI JSON Response
-            JsonNode rootNode = objectMapper.readTree(aiResponse);
-            
+            // 3. Parse and store the AI summary
+            JsonNode root = objectMapper.readTree(aiResponse);
+
             AiReportSummary summary = new AiReportSummary();
             summary.setReportId(report.getId());
-            summary.setSummaryText(rootNode.path("summary").asText());
-            summary.setAbnormalFindings(rootNode.path("abnormalValues").toString());
-            summary.setNormalFindings(rootNode.path("normalValues").toString());
-            summary.setSuggestedQuestions(rootNode.path("suggestedQuestions").toString());
-            summary.setRecommendedFollowUps(rootNode.path("recommendedFollowUps").toString());
-            summary.setConfidenceLevel(rootNode.path("confidenceLevel").asText());
+            summary.setSummaryText(root.path("summary").asText());
+            summary.setAbnormalFindings(root.path("abnormalValues").toString());
+            summary.setNormalFindings(root.path("normalValues").toString());
+            summary.setSuggestedQuestions(root.path("suggestedQuestions").toString());
+            summary.setRecommendedFollowUps(root.path("recommendedFollowUps").toString());
+            summary.setConfidenceLevel(root.path("confidenceLevel").asText());
             summary.setRawAiResponse(aiResponse);
-
             summaryRepository.save(summary);
 
             return mapToResponse(report, summary);
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to analyze report: " + e.getMessage(), e);
         }
     }
 
-    private String extractTextFromPdf(InputStream inputStream) throws Exception {
-        try (PDDocument document = PDDocument.load(inputStream)) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            return stripper.getText(document);
-        }
-    }
-
-    private String callGeminiForText(String text, String reportType, UUID patientId) {
-        String prompt = "You are an AI Medical Assistant. Analyze the following extracted text from a " + reportType + " medical report.\n" +
-                "Text:\n" + text + "\n\n" +
-                "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information only, not a medical diagnosis.";
-        String schema = getAiSchema();
-        return geminiService.generateStructuredJson(prompt, schema, "REPORT_ANALYSIS", patientId);
-    }
-
-    private String callGeminiForImage(byte[] imageBytes, String mimeType, String reportType, UUID patientId) {
-        String prompt = "You are an AI Medical Assistant. Analyze the attached image of a " + reportType + " medical report.\n" +
-                "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information only, not a medical diagnosis.\n" +
-                "Provide the output in JSON format exactly matching this schema:\n" + getAiSchema();
-        
-        String response = geminiService.analyzeImage(prompt, imageBytes, mimeType, "REPORT_ANALYSIS", patientId);
-        
-        // Clean up markdown block if present
-        if (response.startsWith("```json")) {
-            response = response.substring(7);
-            if (response.endsWith("```")) {
-                response = response.substring(0, response.length() - 3);
-            }
-        }
-        return response.trim();
-    }
-
-    private String getAiSchema() {
-        return "{\n" +
-                "  \"summary\": \"Plain language explanation of the report, including the educational disclaimer\",\n" +
-                "  \"abnormalValues\": [\"List of abnormal findings with explanation of what they mean\"],\n" +
-                "  \"normalValues\": [\"List of normal findings\"],\n" +
-                "  \"suggestedQuestions\": [\"Questions the patient should ask their doctor based on this report\"],\n" +
-                "  \"recommendedFollowUps\": [\"Any follow-up tests or actions mentioned in the report or recommended based on findings\"],\n" +
-                "  \"confidenceLevel\": \"HIGH, MEDIUM, or LOW\"\n" +
-                "}";
-    }
+    // ── Query methods ────────────────────────────────────────────────────────
 
     public ReportAnalysisResponse getReportSummary(UUID reportId) {
         MedicalReport report = medicalReportRepository.findById(reportId)
@@ -150,11 +120,15 @@ public class ReportAnalysisService {
     }
 
     public List<ReportAnalysisResponse> getReportsByPatient(UUID patientId) {
-        List<MedicalReport> reports = medicalReportRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
-        return reports.stream().map(report -> {
-            AiReportSummary summary = summaryRepository.findByReportId(report.getId()).orElse(null);
-            return mapToResponse(report, summary);
-        }).collect(Collectors.toList());
+        return medicalReportRepository
+                .findByPatientIdOrderByCreatedAtDesc(patientId)
+                .stream()
+                .map(report -> {
+                    AiReportSummary summary = summaryRepository
+                            .findByReportId(report.getId()).orElse(null);
+                    return mapToResponse(report, summary);
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -162,22 +136,68 @@ public class ReportAnalysisService {
         MedicalReport report = medicalReportRepository.findById(reportId)
                 .orElseThrow(() -> new RuntimeException("Report not found"));
 
-        // Delete summary first to respect constraints
-        summaryRepository.findByReportId(reportId).ifPresent(summaryRepository::delete);
+        // Remove summary first (foreign key constraint)
+        summaryRepository.findByReportId(reportId)
+                .ifPresent(summaryRepository::delete);
 
-        // Delete local file
+        // Best-effort file deletion — don't fail the transaction if the file is missing
         if (report.getFilePath() != null) {
             try {
-                java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("uploads").resolve(report.getFilePath()));
-            } catch (Exception e) {
-                // Ignore file system delete failures so DB transaction succeeds
+                java.nio.file.Files.deleteIfExists(
+                        java.nio.file.Paths.get("uploads").resolve(report.getFilePath()));
+            } catch (Exception ignored) {
+                // File removal is non-critical; the DB record is what matters
             }
         }
 
-        // Delete medical report entity
         medicalReportRepository.delete(report);
     }
 
+    // ── Private helpers ──────────────────────────────────────────────────────
+
+    /** Use PDFBox to pull raw text from a PDF so Gemini gets clean structured input. */
+    private String extractTextFromPdf(InputStream inputStream) throws Exception {
+        try (PDDocument document = PDDocument.load(inputStream)) {
+            return new PDFTextStripper().getText(document);
+        }
+    }
+
+    /** Build a text-based Gemini prompt for extracted PDF content. */
+    private String callGeminiForText(String text, String reportType, UUID patientId) {
+        String prompt = "You are an AI Medical Assistant. Analyze the following extracted text "
+                + "from a " + reportType + " medical report.\nText:\n" + text + "\n\n"
+                + "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information "
+                + "only, not a medical diagnosis.";
+        return geminiService.generateStructuredJson(
+                prompt, getAiSchema(), "REPORT_ANALYSIS", patientId);
+    }
+
+    /** Build an image-based Gemini prompt (raw bytes forwarded to the vision model). */
+    private String callGeminiForImage(byte[] imageBytes, String mimeType,
+                                       String reportType, UUID patientId) {
+        String prompt = "You are an AI Medical Assistant. Analyze the attached image of a "
+                + reportType + " medical report.\n"
+                + "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information "
+                + "only, not a medical diagnosis.\n"
+                + "Provide the output in JSON format exactly matching this schema:\n"
+                + getAiSchema();
+        return geminiService.analyzeImage(
+                prompt, imageBytes, mimeType, "REPORT_ANALYSIS", patientId);
+    }
+
+    /** JSON schema sent to Gemini so it knows exactly what shape to return. */
+    private String getAiSchema() {
+        return "{\n"
+                + "  \"summary\": \"Plain language explanation of the report, including the educational disclaimer\",\n"
+                + "  \"abnormalValues\": [\"List of abnormal findings with explanation of what they mean\"],\n"
+                + "  \"normalValues\": [\"List of normal findings\"],\n"
+                + "  \"suggestedQuestions\": [\"Questions the patient should ask their doctor based on this report\"],\n"
+                + "  \"recommendedFollowUps\": [\"Any follow-up tests or actions mentioned in the report or recommended based on findings\"],\n"
+                + "  \"confidenceLevel\": \"HIGH, MEDIUM, or LOW\"\n"
+                + "}";
+    }
+
+    /** Map entity pair → response DTO. Summary fields are optional (null-safe). */
     private ReportAnalysisResponse mapToResponse(MedicalReport report, AiReportSummary summary) {
         ReportAnalysisResponse response = new ReportAnalysisResponse();
         response.setReportId(report.getId());

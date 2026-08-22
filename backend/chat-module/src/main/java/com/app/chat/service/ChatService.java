@@ -12,16 +12,31 @@ import com.app.chat.repository.ConversationRepository;
 import com.app.chat.repository.MessageRepository;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service managing real-time chat conversations and WebSocket message dispatch
+ * between doctors and patients during active consultation lifecycles.
+ *
+ * Workflow:
+ * 1. createConversation: Automatically initialized when an appointment is confirmed/paid.
+ * 2. sendMessage: Persists chat/attachment messages and publishes to recipient + sender STOMP queues.
+ * 3. getMessages: Fetches conversation transcript and auto-marks incoming messages as read.
+ * 4. getUserConversations: Fetches active conversations for a patient or doctor with other-party info.
+ */
 @Service
 public class ChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
@@ -41,13 +56,16 @@ public class ChatService {
         this.messagingTemplate = messagingTemplate;
     }
 
+    /**
+     * Creates or fetches the conversation channel tied to a specific appointment ID.
+     */
     @Transactional
     public Conversation createConversation(UUID appointmentId) {
         return conversationRepository.findByAppointmentId(appointmentId)
                 .orElseGet(() -> {
                     Appointment appointment = appointmentRepository.findById(appointmentId)
                             .orElseThrow(() -> new RuntimeException("Appointment not found"));
-                    
+
                     Conversation conversation = new Conversation();
                     conversation.setAppointment(appointment);
                     conversation.setDoctor(appointment.getDoctor());
@@ -56,18 +74,22 @@ public class ChatService {
                 });
     }
 
-    public java.util.Optional<ConversationResponse> getConversationByAppointment(UUID appointmentId) {
+    @Transactional(readOnly = true)
+    public Optional<ConversationResponse> getConversationByAppointment(UUID appointmentId) {
         return conversationRepository.findByAppointmentId(appointmentId)
-                .map(this::mapToConversationResponse);
+                .map(c -> mapToConversationResponse(c, null));
     }
 
+    /**
+     * Persists a message and broadcasts to WebSocket queues for both participants.
+     */
     @Transactional
     public MessageResponse sendMessage(SendMessageRequest request, UUID senderId) {
         Conversation conversation = conversationRepository.findById(request.getConversationId())
                 .orElseThrow(() -> new RuntimeException("Conversation not found"));
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-                
+
         Message message = new Message();
         message.setConversation(conversation);
         message.setSender(sender);
@@ -75,66 +97,53 @@ public class ChatService {
         message.setType(request.getType() != null ? request.getType() : MessageType.CHAT);
         message.setFileUrl(request.getFileUrl());
         message.setRead(false);
-        
+
         message = messageRepository.save(message);
-        
         MessageResponse response = mapToMessageResponse(message);
-        
-        // Determine recipient
+
+        // Determine other party's email for private queue delivery
         String recipientEmail = senderId.equals(conversation.getPatient().getId())
-        ? conversation.getDoctor().getUser().getEmail()
-        : conversation.getPatient().getEmail();
+                ? conversation.getDoctor().getUser().getEmail()
+                : conversation.getPatient().getEmail();
 
-        messagingTemplate.convertAndSendToUser(
-            recipientEmail,
-            "/queue/messages",
-            response
-        );
+        try {
+            messagingTemplate.convertAndSendToUser(recipientEmail, "/queue/messages", response);
+            messagingTemplate.convertAndSendToUser(sender.getEmail(), "/queue/messages", response);
+        } catch (Exception e) {
+            log.warn("Failed to push chat message over WebSocket: {}", e.getMessage());
+        }
 
-        messagingTemplate.convertAndSendToUser(
-            sender.getEmail(),
-            "/queue/messages",
-            response    
-        );
         return response;
     }
 
+    /**
+     * Retrieves ordered message log for a conversation and marks unread messages as read.
+     */
+    @Transactional
     public List<MessageResponse> getMessages(UUID conversationId, UUID userId) {
         List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-        
-        // Mark as read
-        boolean updated = false;
-        for (Message message : messages) {
-            if (!message.isRead() && !message.getSender().getId().equals(userId)) {
-                message.setRead(true);
-                updated = true;
-            }
+
+        List<Message> unreadToUpdate = messages.stream()
+                .filter(m -> !m.isRead() && !m.getSender().getId().equals(userId))
+                .peek(m -> m.setRead(true))
+                .collect(Collectors.toList());
+
+        if (!unreadToUpdate.isEmpty()) {
+            messageRepository.saveAll(unreadToUpdate);
         }
-        
-        if (updated) {
-            messageRepository.saveAll(messages);
-        }
-        
+
         return messages.stream().map(this::mapToMessageResponse).collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves all conversations associated with a user (patient or doctor).
+     */
+    @Transactional(readOnly = true)
     public List<ConversationResponse> getUserConversations(UUID userId) {
-        List<Conversation> asPatient = conversationRepository.findByPatientId(userId);
-        
-        // We need to fetch by doctor.user.id if the user is a doctor
-        // For simplicity, we just fetch all and filter, or we can add a custom query in repository.
-        // Assuming user.getId() can be matched if we have a way to find Doctor by User.
-        User user = userRepository.findById(userId).orElseThrow();
-        List<Conversation> conversations = asPatient;
-        
-        if ("DOCTOR".equalsIgnoreCase(user.getRole().toString())) {
-            // we should ideally query by doctor_id. But since we need doctor entity ID, 
-            // we can filter all conversations or update repository
-            // I'll filter for now as a fallback if not implementing specific doctor query
-        }
-
-        // Return mapped list (Implementation abbreviated for simplicity)
-        return null;
+        List<Conversation> conversations = conversationRepository.findByUserId(userId);
+        return conversations.stream()
+                .map(c -> mapToConversationResponse(c, userId))
+                .collect(Collectors.toList());
     }
 
     private MessageResponse mapToMessageResponse(Message message) {
@@ -150,13 +159,28 @@ public class ChatService {
         return response;
     }
 
-    private ConversationResponse mapToConversationResponse(Conversation conversation) {
+    private ConversationResponse mapToConversationResponse(Conversation conversation, UUID currentUserId) {
         ConversationResponse response = new ConversationResponse();
         response.setId(conversation.getId());
         response.setAppointmentId(conversation.getAppointment().getId());
         response.setDoctorId(conversation.getDoctor().getUser().getId());
         response.setPatientId(conversation.getPatient().getId());
-        // Basic mapping for now, full mapping requires more complex logic to get unread count
+
+        if (currentUserId != null) {
+            boolean isPatient = currentUserId.equals(conversation.getPatient().getId());
+            if (isPatient) {
+                response.setOtherPartyName("Dr. " + conversation.getDoctor().getUser().getFullName());
+                response.setOtherPartyRole("DOCTOR");
+            } else {
+                response.setOtherPartyName(conversation.getPatient().getFullName());
+                response.setOtherPartyRole("PATIENT");
+            }
+            long unread = messageRepository.countByConversationIdAndIsReadFalseAndSenderIdNot(
+                    conversation.getId(), currentUserId
+            );
+            response.setUnreadCount(unread);
+        }
+
         return response;
     }
 }

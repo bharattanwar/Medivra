@@ -25,6 +25,21 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Smart pharmacy matching engine — finds the best pharmacies for a patient's medicine list.
+ *
+ * Phase 1 — Nearby list: shows all active pharmacies within a radius, sorted by distance.
+ *
+ * Phase 2 — Smart matching (3-step greedy strategy):
+ *   Step 1: Try to fulfil the entire order at a single pharmacy (best UX).
+ *   Step 2: Greedily split across multiple pharmacies, picking the highest-scoring
+ *           pharmacy for each batch of medicines.
+ *   Step 3: If any medicines still can't be found, expand the search radius up to
+ *           50 km and query per-medicine to locate rare stock.
+ *
+ * Scoring: score = (medicines_found × 100) − (distance_km × 5)
+ * This means a pharmacy 1 km away with 3 out of 5 medicines beats one 10 km away with 3 of 5.
+ */
 @Service
 public class PharmacyMatchService {
 
@@ -34,41 +49,44 @@ public class PharmacyMatchService {
     private final PharmacyInventoryRepository pharmacyInventoryRepository;
 
     public PharmacyMatchService(PharmacyRepository pharmacyRepository,
-                                 PharmacyInventoryRepository pharmacyInventoryRepository) {
+                                PharmacyInventoryRepository pharmacyInventoryRepository) {
         this.pharmacyRepository = pharmacyRepository;
         this.pharmacyInventoryRepository = pharmacyInventoryRepository;
     }
 
-    // ─── Haversine Formula ───────────────────────────────────────────────────
+    // ── Phase 1: Nearby pharmacy list ────────────────────────────────────────
 
-    private double haversine(double lat1, double lng1, double lat2, double lng2) {
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLng = Math.toRadians(lng2 - lng1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return EARTH_RADIUS_KM * c;
-    }
-
-    // ─── Scoring Formula ─────────────────────────────────────────────────────
-
-    private double computeScore(int medicinesFound, double distanceKm) {
-        return (medicinesFound * 100.0) - (distanceKm * 5.0);
-    }
-
-    // ─── Phase 3: Nearby Pharmacy List ───────────────────────────────────────
-
+    /**
+     * Returns all active pharmacies within {@code radiusKm} of the user,
+     * sorted by distance ascending.
+     *
+     * Performance: pre-loads all inventories in two bulk queries instead of
+     * running one query per pharmacy (eliminates N+1).
+     */
     @Transactional(readOnly = true)
-    public List<NearbyPharmacyResponse> findNearbyPharmacies(double userLat, double userLng, double radiusKm) {
-        List<Pharmacy> allActive = pharmacyRepository.findAll().stream()
+    public List<NearbyPharmacyResponse> findNearbyPharmacies(
+            double userLat, double userLng, double radiusKm) {
+
+        // 1. Load all active pharmacies in one query
+        List<Pharmacy> activePharmacies = pharmacyRepository.findAll().stream()
                 .filter(p -> Boolean.TRUE.equals(p.getActive()))
                 .collect(Collectors.toList());
 
-        return allActive.stream()
+        // 2. Load all inventory records in one query and group by pharmacy ID
+        //    (avoids the previous N+1 of calling findByPharmacyId inside the map)
+        Map<UUID, Long> inventoryCountByPharmacy = pharmacyInventoryRepository.findAll()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        inv -> inv.getPharmacy().getId(),
+                        Collectors.counting()));
+
+        // 3. Filter to radius, attach inventory count, and sort by distance
+        return activePharmacies.stream()
                 .map(pharmacy -> {
-                    double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
-                    int inventoryCount = pharmacyInventoryRepository.findByPharmacyId(pharmacy.getId()).size();
+                    double dist = haversine(
+                            userLat, userLng,
+                            pharmacy.getLatitude(), pharmacy.getLongitude());
+                    long count = inventoryCountByPharmacy.getOrDefault(pharmacy.getId(), 0L);
                     return new NearbyPharmacyResponse(
                             pharmacy.getId(),
                             pharmacy.getName(),
@@ -77,15 +95,14 @@ public class PharmacyMatchService {
                             pharmacy.getLatitude(),
                             pharmacy.getLongitude(),
                             pharmacy.getPhoneNumber(),
-                            inventoryCount
-                    );
+                            (int) count);
                 })
                 .filter(r -> r.getDistanceKm() <= radiusKm)
                 .sorted(Comparator.comparingDouble(NearbyPharmacyResponse::getDistanceKm))
                 .collect(Collectors.toList());
     }
 
-    // ─── Phase 4: Smart Pharmacy Matching ────────────────────────────────────
+    // ── Phase 2: Smart matching ───────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public PharmacyMatchResult matchPharmacies(PharmacyMatchRequest request) {
@@ -93,44 +110,48 @@ public class PharmacyMatchService {
         double userLng = request.getUserLongitude();
         double radiusKm = request.getRadiusKm() != null ? request.getRadiusKm() : 25.0;
 
-        // Build a map of requested medicineId -> quantity needed
+        // Build a map of requested medicineId → quantity needed
         Map<UUID, Integer> needed = new HashMap<>();
         for (PharmacyMatchRequest.MedicineItem item : request.getMedicines()) {
             needed.put(item.getMedicineId(), item.getQuantity());
         }
 
-        // Find all active pharmacies within radius with their inventories
-        List<Pharmacy> activePharmacies = pharmacyRepository.findAll().stream()
+        // Filter to active pharmacies within the requested radius
+        List<Pharmacy> candidates = pharmacyRepository.findAll().stream()
                 .filter(p -> Boolean.TRUE.equals(p.getActive()))
-                .filter(p -> haversine(userLat, userLng, p.getLatitude(), p.getLongitude()) <= radiusKm)
+                .filter(p -> haversine(userLat, userLng,
+                        p.getLatitude(), p.getLongitude()) <= radiusKm)
                 .collect(Collectors.toList());
 
-        // Pre-load inventories for all candidate pharmacies
+        // Pre-load inventories for all candidate pharmacies in one query
         Map<UUID, List<PharmacyInventory>> inventoryByPharmacy = new HashMap<>();
-        for (Pharmacy pharmacy : activePharmacies) {
-            List<PharmacyInventory> inv = pharmacyInventoryRepository.findByPharmacyId(pharmacy.getId());
-            inventoryByPharmacy.put(pharmacy.getId(), inv);
+        for (Pharmacy pharmacy : candidates) {
+            inventoryByPharmacy.put(
+                    pharmacy.getId(),
+                    pharmacyInventoryRepository.findByPharmacyId(pharmacy.getId()));
         }
 
-        // Score each pharmacy by how many requested medicines it can supply (with sufficient quantity)
+        // Score each pharmacy by how many requested medicines it can fully supply
         record ScoredPharmacy(Pharmacy pharmacy, double distanceKm, double score,
                                List<PharmacyInventory> matchingInventory) {}
 
-        List<ScoredPharmacy> scored = activePharmacies.stream()
+        List<ScoredPharmacy> scored = candidates.stream()
                 .map(pharmacy -> {
-                    double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
+                    double dist = haversine(
+                            userLat, userLng,
+                            pharmacy.getLatitude(), pharmacy.getLongitude());
                     List<PharmacyInventory> inv = inventoryByPharmacy.get(pharmacy.getId());
                     List<PharmacyInventory> matching = inv.stream()
                             .filter(i -> needed.containsKey(i.getMedicine().getId()))
                             .filter(i -> i.getQuantity() >= needed.get(i.getMedicine().getId()))
                             .collect(Collectors.toList());
-                    double sc = computeScore(matching.size(), dist);
-                    return new ScoredPharmacy(pharmacy, dist, sc, matching);
+                    return new ScoredPharmacy(pharmacy, dist,
+                            computeScore(matching.size(), dist), matching);
                 })
                 .sorted(Comparator.comparingDouble(ScoredPharmacy::score).reversed())
                 .collect(Collectors.toList());
 
-        // ── Strategy 1: Single Pharmacy First ────────────────────────────────
+        // ── Step 1: Single-pharmacy fulfilment ────────────────────────────────
         Optional<ScoredPharmacy> singleMatch = scored.stream()
                 .filter(sp -> sp.matchingInventory().size() == needed.size())
                 .findFirst();
@@ -138,9 +159,7 @@ public class PharmacyMatchService {
         if (singleMatch.isPresent()) {
             ScoredPharmacy sp = singleMatch.get();
             List<AllocatedItem> items = buildAllocatedItems(sp.matchingInventory(), needed);
-            BigDecimal subtotal = items.stream()
-                    .map(AllocatedItem::getLineTotal)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal subtotal = sumLineTotals(items);
             PharmacyAllocation allocation = new PharmacyAllocation(
                     sp.pharmacy().getId(), sp.pharmacy().getName(),
                     sp.pharmacy().getAddress(), round(sp.distanceKm()),
@@ -148,32 +167,28 @@ public class PharmacyMatchService {
             return new PharmacyMatchResult(true, List.of(allocation), subtotal, List.of());
         }
 
-        // ── Strategy 2: Greedy Split Across Multiple Pharmacies ──────────────
-        Set<UUID> remainingMedicineIds = new HashSet<>(needed.keySet());
+        // ── Step 2: Greedy split across multiple pharmacies ───────────────────
+        Set<UUID> remaining = new HashSet<>(needed.keySet());
         List<PharmacyAllocation> allocations = new ArrayList<>();
         BigDecimal grandTotal = BigDecimal.ZERO;
-        // Track which pharmacies have been used to avoid duplicates
         Set<UUID> usedPharmacyIds = new HashSet<>();
 
         for (ScoredPharmacy sp : scored) {
-            if (remainingMedicineIds.isEmpty()) break;
+            if (remaining.isEmpty()) break;
 
-            List<PharmacyInventory> canFulfill = sp.matchingInventory().stream()
-                    .filter(i -> remainingMedicineIds.contains(i.getMedicine().getId()))
+            List<PharmacyInventory> canFulfil = sp.matchingInventory().stream()
+                    .filter(i -> remaining.contains(i.getMedicine().getId()))
                     .collect(Collectors.toList());
 
-            if (canFulfill.isEmpty()) continue;
+            if (canFulfil.isEmpty()) continue;
 
-            // Build a subset of needed map only for this pharmacy's contribution
             Map<UUID, Integer> subsetNeeded = new HashMap<>();
-            for (PharmacyInventory inv : canFulfill) {
-                subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId()));
-            }
+            canFulfil.forEach(inv ->
+                    subsetNeeded.put(inv.getMedicine().getId(),
+                            needed.get(inv.getMedicine().getId())));
 
-            List<AllocatedItem> items = buildAllocatedItems(canFulfill, subsetNeeded);
-            BigDecimal subtotal = items.stream()
-                    .map(AllocatedItem::getLineTotal)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<AllocatedItem> items = buildAllocatedItems(canFulfil, subsetNeeded);
+            BigDecimal subtotal = sumLineTotals(items);
 
             allocations.add(new PharmacyAllocation(
                     sp.pharmacy().getId(), sp.pharmacy().getName(),
@@ -182,36 +197,25 @@ public class PharmacyMatchService {
 
             grandTotal = grandTotal.add(subtotal);
             usedPharmacyIds.add(sp.pharmacy().getId());
-            canFulfill.forEach(i -> remainingMedicineIds.remove(i.getMedicine().getId()));
+            canFulfil.forEach(i -> remaining.remove(i.getMedicine().getId()));
         }
 
-        // ── Strategy 3: Targeted Search for Remaining Medicines ──────────────
-        // If some medicines are still unsatisfied, search more broadly for each
-        // unsatisfied medicine by querying the inventory index directly.
-        // Expand search to 50km max to find any pharmacy stocking the medicine.
-        if (!remainingMedicineIds.isEmpty()) {
+        // ── Step 3: Expanded search for any still-unmatched medicines ─────────
+        // If some medicines couldn't be found within the original radius, widen
+        // the search to max(2 × radius, 50 km) and check per medicine.
+        if (!remaining.isEmpty()) {
             double expandedRadius = Math.max(radiusKm * 2, 50.0);
 
-            for (UUID medicineId : new ArrayList<>(remainingMedicineIds)) {
-                // Find all inventory entries for this medicine across all pharmacies
-                List<PharmacyInventory> allInventoryForMedicine =
-                        pharmacyInventoryRepository.findByMedicineId(medicineId);
-
-                // Filter to sufficient quantity, active pharmacy, within expanded radius,
-                // and not already used in allocations
-                Optional<PharmacyInventory> bestMatch = allInventoryForMedicine.stream()
-                        .filter(inv -> inv.getQuantity() >= needed.get(medicineId))
-                        .filter(inv -> Boolean.TRUE.equals(inv.getPharmacy().getActive()))
-                        .filter(inv -> !usedPharmacyIds.contains(inv.getPharmacy().getId())
-                                || true) // Allow same pharmacy if needed — will merge below
-                        .filter(inv -> {
-                            double dist = haversine(userLat, userLng,
-                                    inv.getPharmacy().getLatitude(),
-                                    inv.getPharmacy().getLongitude());
-                            return dist <= expandedRadius;
-                        })
-                        .min(Comparator.comparingDouble(inv ->
-                                haversine(userLat, userLng,
+            for (UUID medicineId : new ArrayList<>(remaining)) {
+                Optional<PharmacyInventory> bestMatch =
+                        pharmacyInventoryRepository.findByMedicineId(medicineId).stream()
+                                .filter(inv -> inv.getQuantity() >= needed.get(medicineId))
+                                .filter(inv -> Boolean.TRUE.equals(inv.getPharmacy().getActive()))
+                                .filter(inv -> haversine(userLat, userLng,
+                                        inv.getPharmacy().getLatitude(),
+                                        inv.getPharmacy().getLongitude()) <= expandedRadius)
+                                .min(Comparator.comparingDouble(inv -> haversine(
+                                        userLat, userLng,
                                         inv.getPharmacy().getLatitude(),
                                         inv.getPharmacy().getLongitude())));
 
@@ -227,7 +231,7 @@ public class PharmacyMatchService {
                             medicineId, inv.getMedicine().getName(),
                             qty, inv.getPrice(), lineTotal);
 
-                    // Check if this pharmacy already has an allocation — merge items
+                    // Merge into an existing allocation for this pharmacy if there is one
                     Optional<PharmacyAllocation> existingAlloc = allocations.stream()
                             .filter(a -> a.getPharmacyId().equals(pharmacy.getId()))
                             .findFirst();
@@ -248,28 +252,53 @@ public class PharmacyMatchService {
                     }
 
                     grandTotal = grandTotal.add(lineTotal);
-                    remainingMedicineIds.remove(medicineId);
+                    remaining.remove(medicineId);
                 }
             }
         }
 
-        boolean allSatisfied = remainingMedicineIds.isEmpty();
+        boolean allSatisfied = remaining.isEmpty();
         return new PharmacyMatchResult(allSatisfied, allocations, grandTotal,
-                new ArrayList<>(remainingMedicineIds));
+                new ArrayList<>(remaining));
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
+    /** Build AllocatedItem list from a set of matching inventory rows. */
     private List<AllocatedItem> buildAllocatedItems(List<PharmacyInventory> inventories,
                                                      Map<UUID, Integer> neededMap) {
         return inventories.stream().map(inv -> {
             UUID medId = inv.getMedicine().getId();
             int qty = neededMap.get(medId);
             BigDecimal lineTotal = inv.getPrice().multiply(BigDecimal.valueOf(qty));
-            return new AllocatedItem(medId, inv.getMedicine().getName(), qty, inv.getPrice(), lineTotal);
+            return new AllocatedItem(medId, inv.getMedicine().getName(),
+                    qty, inv.getPrice(), lineTotal);
         }).collect(Collectors.toList());
     }
 
+    /** Sum the line totals of all allocated items. */
+    private BigDecimal sumLineTotals(List<AllocatedItem> items) {
+        return items.stream()
+                .map(AllocatedItem::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** score = (medicines found × 100) − (distance × 5) — favours nearby, well-stocked pharmacies. */
+    private double computeScore(int medicinesFound, double distanceKm) {
+        return (medicinesFound * 100.0) - (distanceKm * 5.0);
+    }
+
+    /** Haversine formula — returns the great-circle distance in kilometres. */
+    private double haversine(double lat1, double lng1, double lat2, double lng2) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    /** Round a double to 2 decimal places. */
     private double round(double value) {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }

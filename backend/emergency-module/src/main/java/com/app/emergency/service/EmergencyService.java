@@ -1,10 +1,20 @@
 package com.app.emergency.service;
 
-import com.app.emergency.dto.*;
-import com.app.emergency.entity.*;
-import com.app.emergency.repository.*;
-import com.app.user.repository.UserRepository;
+import com.app.emergency.dto.EmergencyContactRequest;
+import com.app.emergency.dto.EmergencyResponse;
+import com.app.emergency.dto.SosRequest;
+import com.app.emergency.entity.EmergencyContact;
+import com.app.emergency.entity.EmergencyRequest;
+import com.app.emergency.entity.EmergencyStatus;
+import com.app.emergency.entity.EmergencyTimeline;
+import com.app.emergency.entity.EmergencyTimelineEvent;
+import com.app.emergency.repository.AmbulanceDriverRepository;
+import com.app.emergency.repository.AmbulanceRepository;
+import com.app.emergency.repository.EmergencyContactRepository;
+import com.app.emergency.repository.EmergencyRequestRepository;
+import com.app.emergency.repository.EmergencyTimelineRepository;
 import com.app.user.entity.User;
+import com.app.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +23,16 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service managing emergency SOS activations, timeline state tracking,
+ * emergency contact notifications, and patient SOS history.
+ *
+ * Workflow:
+ * 1. createEmergency: Initializes SOS request with SEARCHING status, records initial timeline,
+ *    alerts registered emergency contacts, and triggers async ambulance dispatch.
+ * 2. cancelEmergency: Aborts SOS activation, releases any assigned ambulance, and notifies parties.
+ * 3. getEmergencyStatus: Retrieves real-time status, driver details, live location, and timeline entries.
+ */
 @Service
 public class EmergencyService {
 
@@ -25,15 +45,14 @@ public class EmergencyService {
     private final AmbulanceDispatchService dispatchService;
     private final EmergencyNotificationService notificationService;
 
-    public EmergencyService(
-            EmergencyRequestRepository emergencyRequestRepository,
-            EmergencyTimelineRepository timelineRepository,
-            EmergencyContactRepository contactRepository,
-            AmbulanceRepository ambulanceRepository,
-            AmbulanceDriverRepository driverRepository,
-            UserRepository userRepository,
-            AmbulanceDispatchService dispatchService,
-            EmergencyNotificationService notificationService) {
+    public EmergencyService(EmergencyRequestRepository emergencyRequestRepository,
+                            EmergencyTimelineRepository timelineRepository,
+                            EmergencyContactRepository contactRepository,
+                            AmbulanceRepository ambulanceRepository,
+                            AmbulanceDriverRepository driverRepository,
+                            UserRepository userRepository,
+                            AmbulanceDispatchService dispatchService,
+                            EmergencyNotificationService notificationService) {
         this.emergencyRequestRepository = emergencyRequestRepository;
         this.timelineRepository = timelineRepository;
         this.contactRepository = contactRepository;
@@ -44,9 +63,12 @@ public class EmergencyService {
         this.notificationService = notificationService;
     }
 
+    /**
+     * Activates an emergency SOS, records timeline events, triggers emergency contact alerts,
+     * and requests ambulance dispatch within initial search radius.
+     */
     @Transactional
     public EmergencyResponse createEmergency(SosRequest request, UUID patientId) {
-        // Create the emergency request
         EmergencyRequest emergency = new EmergencyRequest();
         emergency.setPatientId(patientId);
         emergency.setPatientLat(request.getLat());
@@ -57,9 +79,10 @@ public class EmergencyService {
         emergency.setNotes(request.getNotes());
         emergency = emergencyRequestRepository.save(emergency);
 
-        // Record timeline
+        // Record initial milestone events
         recordTimeline(emergency.getId(), EmergencyTimelineEvent.SOS_CREATED, "Emergency SOS activated by patient");
-        recordTimeline(emergency.getId(), EmergencyTimelineEvent.SEARCH_STARTED, "Searching for nearby ambulances within " + emergency.getSearchRadiusKm() + " km");
+        recordTimeline(emergency.getId(), EmergencyTimelineEvent.SEARCH_STARTED,
+                "Searching for nearby ambulances within " + emergency.getSearchRadiusKm() + " km");
 
         // Notify emergency contacts immediately
         List<EmergencyContact> contacts = contactRepository.findByPatientId(patientId);
@@ -68,12 +91,14 @@ public class EmergencyService {
         notificationService.notifyEmergencyContacts(contacts, emergency, patientName);
 
         // Dispatch ambulances asynchronously
-        EmergencyRequest finalEmergency = emergency;
-        dispatchService.dispatchNearbyAmbulances(finalEmergency);
+        dispatchService.dispatchNearbyAmbulances(emergency);
 
         return buildResponse(emergency, patient);
     }
 
+    /**
+     * Retrieves current emergency status including assigned ambulance and full timeline events.
+     */
     @Transactional(readOnly = true)
     public EmergencyResponse getEmergencyStatus(UUID emergencyId, UUID requesterId) {
         EmergencyRequest emergency = emergencyRequestRepository.findById(emergencyId)
@@ -83,6 +108,9 @@ public class EmergencyService {
         return buildResponse(emergency, patient);
     }
 
+    /**
+     * Cancels an active emergency, releases reserved ambulance fleet, and broadcasts cancellation.
+     */
     @Transactional
     public EmergencyResponse cancelEmergency(UUID emergencyId, UUID patientId) {
         EmergencyRequest emergency = emergencyRequestRepository.findById(emergencyId)
@@ -95,7 +123,7 @@ public class EmergencyService {
         emergency.setStatus(EmergencyStatus.CANCELLED);
         emergencyRequestRepository.save(emergency);
 
-        // Free up the ambulance if one was assigned
+        // Free up assigned ambulance
         if (emergency.getAssignedAmbulanceId() != null) {
             ambulanceRepository.findById(emergency.getAssignedAmbulanceId()).ifPresent(amb -> {
                 amb.setIsAvailable(true);
@@ -118,7 +146,8 @@ public class EmergencyService {
                 .collect(Collectors.toList());
     }
 
-    // Emergency Contact Management
+    // ── Emergency Contact Management ──────────────────────────────────────────
+
     @Transactional
     public EmergencyContact addEmergencyContact(EmergencyContactRequest request, UUID patientId) {
         EmergencyContact contact = new EmergencyContact();
@@ -140,7 +169,9 @@ public class EmergencyService {
         contactRepository.deleteByIdAndPatientId(contactId, patientId);
     }
 
-    // Helper: record a timeline event
+    /**
+     * Appends an audit milestone to the emergency timeline.
+     */
     public void recordTimeline(UUID emergencyId, EmergencyTimelineEvent event, String description) {
         EmergencyTimeline entry = new EmergencyTimeline();
         entry.setEmergencyId(emergencyId);
@@ -150,7 +181,6 @@ public class EmergencyService {
         timelineRepository.save(entry);
     }
 
-    // Helper: build rich response DTO
     private EmergencyResponse buildResponse(EmergencyRequest emergency, User patient) {
         EmergencyResponse response = new EmergencyResponse();
         response.setId(emergency.getId());
@@ -166,7 +196,7 @@ public class EmergencyService {
         response.setCreatedAt(emergency.getCreatedAt());
         response.setAssignedAmbulanceId(emergency.getAssignedAmbulanceId());
 
-        // Enrich ambulance/driver info
+        // Enrich vehicle and driver details if assigned
         if (emergency.getAssignedAmbulanceId() != null) {
             ambulanceRepository.findById(emergency.getAssignedAmbulanceId()).ifPresent(amb -> {
                 response.setVehicleNumber(amb.getVehicleNumber());
@@ -183,7 +213,7 @@ public class EmergencyService {
             });
         }
 
-        // Load timeline
+        // Chronological timeline events
         List<EmergencyResponse.TimelineEntryDto> timeline = timelineRepository
                 .findByEmergencyIdOrderByEventTimestampAsc(emergency.getId())
                 .stream()

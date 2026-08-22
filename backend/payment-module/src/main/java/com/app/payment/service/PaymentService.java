@@ -3,17 +3,23 @@ package com.app.payment.service;
 import com.app.appointment.entity.Appointment;
 import com.app.appointment.entity.AppointmentStatus;
 import com.app.appointment.repository.AppointmentRepository;
+import com.app.chat.service.ChatService;
+import com.app.common.entity.NotificationType;
+import com.app.common.event.NotificationEvent;
 import com.app.payment.config.RazorpayProperties;
-import com.app.payment.dto.*;
+import com.app.payment.dto.CreateOrderRequest;
+import com.app.payment.dto.CreateOrderResponse;
+import com.app.payment.dto.InvoiceResponse;
+import com.app.payment.dto.PaymentResponse;
+import com.app.payment.dto.VerifyPaymentRequest;
 import com.app.payment.entity.Payment;
 import com.app.payment.entity.PaymentStatus;
 import com.app.payment.entity.RefundStatus;
 import com.app.payment.repository.PaymentRepository;
-import com.app.chat.service.ChatService;
-import com.app.common.event.NotificationEvent;
-import com.app.common.entity.NotificationType;
 import com.razorpay.Order;
 import com.razorpay.Refund;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +31,21 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service managing appointment payments, Razorpay order creation,
+ * signature verification, refunds, and invoice generation.
+ *
+ * Workflow:
+ * 1. createOrder: Generates a gateway order (Razorpay or mock) for the appointment consultation fee.
+ * 2. verifyPayment: Validates Razorpay signature / transaction ID, transitions payment to PAID,
+ *    confirms the appointment, initializes consultation chat, and sends notifications.
+ * 3. initiateRefund: Processes refunds through Razorpay API when appointments are cancelled.
+ * 4. getInvoice: Produces structured invoice details for completed transactions.
+ */
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepository;
     private final AppointmentRepository appointmentRepository;
@@ -36,11 +55,11 @@ public class PaymentService {
     private final ApplicationEventPublisher eventPublisher;
 
     public PaymentService(PaymentRepository paymentRepository,
-            AppointmentRepository appointmentRepository,
-            RazorpayService razorpayService,
-            RazorpayProperties razorpayProperties,
-            ChatService chatService,
-            ApplicationEventPublisher eventPublisher) {
+                          AppointmentRepository appointmentRepository,
+                          RazorpayService razorpayService,
+                          RazorpayProperties razorpayProperties,
+                          ChatService chatService,
+                          ApplicationEventPublisher eventPublisher) {
         this.paymentRepository = paymentRepository;
         this.appointmentRepository = appointmentRepository;
         this.razorpayService = razorpayService;
@@ -49,6 +68,10 @@ public class PaymentService {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Prepares a payment order for an appointment. Supports both live Razorpay
+     * gateway integration and mock sandbox mode for local development.
+     */
     @Transactional
     public CreateOrderResponse createOrder(CreateOrderRequest request) {
         Appointment appointment = appointmentRepository.findById(request.getAppointmentId())
@@ -96,7 +119,8 @@ public class PaymentService {
                 response.setPaymentId(payment.getId());
                 response.setMockMode(false);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to create Razorpay order: " + e.getMessage());
+                log.error("Razorpay order creation failed: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to create Razorpay order: " + e.getMessage(), e);
             }
         } else {
             String mockOrderId = razorpayService.createMockOrderId();
@@ -113,6 +137,10 @@ public class PaymentService {
         return response;
     }
 
+    /**
+     * Verifies payment completion via signature verification. Confirms appointment,
+     * provisions real-time chat room, and dispatches confirmation events.
+     */
     @Transactional
     public PaymentResponse verifyPayment(VerifyPaymentRequest request) {
         Appointment appointment = appointmentRepository.findById(request.getAppointmentId())
@@ -157,39 +185,40 @@ public class PaymentService {
         appointment.setStatus(AppointmentStatus.CONFIRMED);
         appointmentRepository.save(appointment);
 
-        // Trigger chat creation
-        chatService.createConversation(appointment.getId());
-
-        // Publish notifications
+        // Provision chat channel between doctor and patient
         try {
-            // 1. Notify Patient of successful payment and confirmation
-            eventPublisher.publishEvent(new NotificationEvent(
-                    this,
-                    appointment.getPatient().getId(),
-                    "Payment Successful",
-                    String.format("Your payment of ₹%s for Dr. %s was verified. Appointment is confirmed.",
-                            payment.getAmount().toString(),
-                            appointment.getDoctor().getUser().getFullName()),
-                    NotificationType.PAYMENT_SUCCESS,
-                    payment.getId().toString()));
-
-            // 2. Notify Doctor of appointment confirmation
-            eventPublisher.publishEvent(new NotificationEvent(
-                    this,
-                    appointment.getDoctor().getUserId(),
-                    "Appointment Confirmed (Paid)",
-                    String.format("Patient %s has completed their payment. The appointment for %s is confirmed.",
-                            appointment.getPatient().getFullName(),
-                            appointment.getAppointmentDate().toString()),
-                    NotificationType.APPOINTMENT_CONFIRMED,
-                    appointment.getId().toString()));
+            chatService.createConversation(appointment.getId());
         } catch (Exception e) {
-            System.err.println("Failed to publish payment success notifications: " + e.getMessage());
+            log.warn("Failed to initialize conversation for appointment {}: {}", appointment.getId(), e.getMessage());
         }
+
+        // Publish confirmation events
+        publishNotification(
+                appointment.getPatient().getId(),
+                "Payment Successful",
+                String.format("Your payment of ₹%s for Dr. %s was verified. Appointment is confirmed.",
+                        payment.getAmount(),
+                        appointment.getDoctor().getUser().getFullName()),
+                NotificationType.PAYMENT_SUCCESS,
+                payment.getId().toString()
+        );
+
+        publishNotification(
+                appointment.getDoctor().getUserId(),
+                "Appointment Confirmed (Paid)",
+                String.format("Patient %s has completed payment. The appointment for %s is confirmed.",
+                        appointment.getPatient().getFullName(),
+                        appointment.getAppointmentDate()),
+                NotificationType.APPOINTMENT_CONFIRMED,
+                appointment.getId().toString()
+        );
 
         return mapToResponse(payment);
     }
 
+    /**
+     * Triggers a refund for a previously completed payment through Razorpay API.
+     */
     @Transactional
     public PaymentResponse initiateRefund(UUID paymentId) {
         Payment payment = paymentRepository.findByIdWithDetails(paymentId)
@@ -215,7 +244,8 @@ public class PaymentService {
             } catch (Exception e) {
                 payment.setRefundStatus(RefundStatus.FAILED);
                 paymentRepository.save(payment);
-                throw new RuntimeException("Refund failed: " + e.getMessage());
+                log.error("Refund processing failed for payment {}: {}", paymentId, e.getMessage());
+                throw new RuntimeException("Refund failed: " + e.getMessage(), e);
             }
         } else {
             payment.setRefundStatus(RefundStatus.PROCESSED);
@@ -230,6 +260,7 @@ public class PaymentService {
         return mapToResponse(payment);
     }
 
+    @Transactional(readOnly = true)
     public List<PaymentResponse> getPaymentHistory(UUID patientId) {
         return paymentRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
                 .stream()
@@ -237,12 +268,14 @@ public class PaymentService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public PaymentResponse getPaymentByAppointment(UUID appointmentId) {
         return paymentRepository.findByAppointmentId(appointmentId)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new RuntimeException("Payment not found for appointment"));
     }
 
+    @Transactional(readOnly = true)
     public InvoiceResponse getInvoice(UUID paymentId) {
         Payment payment = paymentRepository.findByIdWithDetails(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
@@ -274,6 +307,17 @@ public class PaymentService {
         String datePart = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String uniquePart = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         return "INV-" + datePart + "-" + uniquePart;
+    }
+
+    private void publishNotification(UUID recipientId, String title, String message,
+                                     NotificationType type, String relatedEntityId) {
+        try {
+            eventPublisher.publishEvent(new NotificationEvent(
+                    this, recipientId, title, message, type, relatedEntityId
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to publish payment notification event: {}", e.getMessage());
+        }
     }
 
     private PaymentResponse mapToResponse(Payment payment) {

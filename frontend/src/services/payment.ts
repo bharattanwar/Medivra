@@ -45,41 +45,56 @@ export interface InvoiceData {
   method: string;
 }
 
+export interface VerifyPaymentPayload {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature?: string;
+  appointmentId: string;
+  method?: string;
+}
+
+/**
+ * Creates a payment gateway order (Razorpay or mock) for a pending appointment.
+ */
 export const createPaymentOrder = async (
   appointmentId: string,
   patientId: string
 ): Promise<CreateOrderResponse> => {
-  const response = await api.post('/payments/create-order', {
+  const response = await api.post<CreateOrderResponse>('/payments/create-order', {
     appointmentId,
     patientId,
   });
   return response.data;
 };
 
-export const verifyPayment = async (payload: {
-  razorpayOrderId: string;
-  razorpayPaymentId: string;
-  razorpaySignature?: string;
-  appointmentId: string;
-  method?: string;
-}) => {
-  const response = await api.post('/payments/verify', payload);
+/**
+ * Validates Razorpay payment signature and confirms appointment.
+ */
+export const verifyPayment = async (payload: VerifyPaymentPayload): Promise<PaymentRecord> => {
+  const response = await api.post<PaymentRecord>('/payments/verify', payload);
   return response.data;
 };
 
-export const getPaymentHistory = async (
-  patientId: string
-): Promise<PaymentRecord[]> => {
-  const response = await api.get(`/payments/patient/${patientId}`);
+/**
+ * Retrieves appointment payment history for a patient.
+ */
+export const getPaymentHistory = async (patientId: string): Promise<PaymentRecord[]> => {
+  const response = await api.get<PaymentRecord[]>(`/payments/patient/${patientId}`);
   return response.data;
 };
 
+/**
+ * Retrieves detailed invoice information for a completed transaction.
+ */
 export const getInvoice = async (paymentId: string): Promise<InvoiceData> => {
-  const response = await api.get(`/payments/${paymentId}/invoice`);
+  const response = await api.get<InvoiceData>(`/payments/${paymentId}/invoice`);
   return response.data;
 };
 
-export const requestRefund = async (paymentId: string) => {
-  const response = await api.post(`/payments/${paymentId}/refund`);
+/**
+ * Requests a refund for a cancelled paid consultation.
+ */
+export const requestRefund = async (paymentId: string): Promise<PaymentRecord> => {
+  const response = await api.post<PaymentRecord>(`/payments/${paymentId}/refund`);
   return response.data;
 };

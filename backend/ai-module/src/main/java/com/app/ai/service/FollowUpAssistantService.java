@@ -23,6 +23,22 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Manages the AI-driven post-consultation follow-up system.
+ *
+ * Doctors create a FollowUpPlan after a consultation, specifying diagnosis,
+ * prescribed medicines, and how many days the patient should be monitored.
+ *
+ * Every day at 9 AM a scheduled job reminds active patients to submit a check-in.
+ * Each check-in is analysed by Gemini, which recommends one of:
+ *   - CONTINUE         → recovery on track, keep going
+ *   - BOOK_FOLLOWUP    → patient should book a new appointment
+ *   - CONTACT_DOCTOR   → something needs the doctor's attention today
+ *   - EMERGENCY        → patient needs immediate care
+ *
+ * If the action is anything other than CONTINUE, the plan is escalated
+ * and the doctor receives an in-app notification.
+ */
 @Service
 public class FollowUpAssistantService {
 
@@ -43,6 +59,7 @@ public class FollowUpAssistantService {
         this.objectMapper = new ObjectMapper();
     }
 
+    /** Create a follow-up plan for a patient after a consultation. */
     @Transactional
     public FollowUpPlan createPlan(FollowUpPlanRequest request) {
         FollowUpPlan plan = new FollowUpPlan();
@@ -50,98 +67,111 @@ public class FollowUpAssistantService {
         plan.setPatientId(request.getPatientId());
         plan.setDoctorId(request.getDoctorId());
         plan.setDiagnosis(request.getDiagnosis());
-        
+
         try {
             plan.setMedicines(objectMapper.writeValueAsString(request.getMedicines()));
         } catch (Exception e) {
             plan.setMedicines("[]");
         }
-        
+
         plan.setFollowUpIntervalDays(request.getFollowUpIntervalDays());
         plan.setStartDate(LocalDate.now());
         plan.setEndDate(LocalDate.now().plusDays(request.getFollowUpIntervalDays()));
         plan.setStatus("ACTIVE");
-        
         plan = planRepository.save(plan);
 
+        // Notify patient that monitoring has started
         eventPublisher.publishEvent(new NotificationEvent(
-            this,
-            request.getPatientId(),
-            "Follow-up Plan Created",
-            "Dr. has created a follow-up plan for your recovery. We will check in with you daily.",
-            NotificationType.SYSTEM,
-            plan.getId().toString()
+                this,
+                request.getPatientId(),
+                "Follow-up Plan Created",
+                "Your doctor has created a follow-up plan for your recovery. "
+                        + "We will check in with you daily.",
+                NotificationType.SYSTEM,
+                plan.getId().toString()
         ));
 
         return plan;
     }
 
     public FollowUpPlan getPlan(UUID planId) {
-        return planRepository.findById(planId).orElseThrow(() -> new RuntimeException("Plan not found"));
+        return planRepository.findById(planId)
+                .orElseThrow(() -> new RuntimeException("Plan not found: " + planId));
     }
 
     public List<FollowUpPlan> getPlansByPatient(UUID patientId) {
         return planRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
     }
 
+    /**
+     * Process a daily check-in from the patient.
+     * Sends the patient's responses + previous history to Gemini and
+     * stores the AI analysis alongside the check-in record.
+     */
     @Transactional
     public FollowUpCheckInResponse processCheckIn(FollowUpCheckInRequest request) {
         FollowUpPlan plan = getPlan(request.getPlanId());
-        
-        List<FollowUpCheckIn> previousCheckIns = checkInRepository.findByFollowUpPlanIdOrderByDayNumberAsc(plan.getId());
-        
-        // Prepare context for Gemini
+        List<FollowUpCheckIn> previousCheckIns =
+                checkInRepository.findByFollowUpPlanIdOrderByDayNumberAsc(plan.getId());
+
+        // Build context string so Gemini understands the patient's recovery arc
         StringBuilder context = new StringBuilder();
         context.append("Diagnosis: ").append(plan.getDiagnosis()).append("\n");
         context.append("Medicines: ").append(plan.getMedicines()).append("\n");
-        context.append("Current Day: ").append(request.getDayNumber()).append(" out of ").append(plan.getFollowUpIntervalDays()).append("\n");
+        context.append("Current Day: ").append(request.getDayNumber())
+               .append(" out of ").append(plan.getFollowUpIntervalDays()).append("\n");
         context.append("Previous check-ins:\n");
         for (FollowUpCheckIn prev : previousCheckIns) {
-            context.append("Day ").append(prev.getDayNumber()).append(": ").append(prev.getResponses()).append("\n");
+            context.append("Day ").append(prev.getDayNumber())
+                   .append(": ").append(prev.getResponses()).append("\n");
         }
-        
         context.append("\nToday's check-in responses:\n");
-        request.getResponses().forEach((k, v) -> context.append(k).append(": ").append(v).append("\n"));
-        
-        String prompt = "You are an AI Follow-up Monitor tracking a patient's recovery.\n" +
-                context.toString() + "\n\n" +
-                "Evaluate the patient's recovery progress, symptom worsening, and medication adherence.\n";
-                
-        String schema = "{\n" +
-                "  \"aiAnalysis\": \"A short explanation of the patient's current state and progress.\",\n" +
-                "  \"actionRecommended\": \"CONTINUE, BOOK_FOLLOWUP, CONTACT_DOCTOR, or EMERGENCY\"\n" +
-                "}";
+        request.getResponses().forEach(
+                (k, v) -> context.append(k).append(": ").append(v).append("\n"));
 
-        String aiResponse = geminiService.generateStructuredJson(prompt, schema, "FOLLOWUP_ANALYSIS", plan.getPatientId());
+        String prompt = "You are an AI Follow-up Monitor tracking a patient's recovery.\n"
+                + context
+                + "\nEvaluate the patient's recovery progress, symptom worsening, "
+                + "and medication adherence.\n";
+
+        String schema = "{\n"
+                + "  \"aiAnalysis\": \"A short explanation of the patient's current state.\",\n"
+                + "  \"actionRecommended\": \"CONTINUE, BOOK_FOLLOWUP, CONTACT_DOCTOR, or EMERGENCY\"\n"
+                + "}";
+
+        String aiResponse = geminiService.generateStructuredJson(
+                prompt, schema, "FOLLOWUP_ANALYSIS", plan.getPatientId());
 
         FollowUpCheckIn checkIn = new FollowUpCheckIn();
         checkIn.setFollowUpPlanId(plan.getId());
         checkIn.setDayNumber(request.getDayNumber());
-        
+
         try {
             checkIn.setResponses(objectMapper.writeValueAsString(request.getResponses()));
-            JsonNode rootNode = objectMapper.readTree(aiResponse);
-            checkIn.setAiAnalysis(rootNode.path("aiAnalysis").asText());
-            checkIn.setActionRecommended(rootNode.path("actionRecommended").asText());
+            JsonNode root = objectMapper.readTree(aiResponse);
+            checkIn.setAiAnalysis(root.path("aiAnalysis").asText());
+            checkIn.setActionRecommended(root.path("actionRecommended").asText());
         } catch (Exception e) {
-            throw new RuntimeException("Failed to process check-in", e);
+            throw new RuntimeException("Failed to process check-in: " + e.getMessage(), e);
         }
-        
+
         checkIn = checkInRepository.save(checkIn);
 
-        // Escalation Logic
+        // Escalate the plan and alert the doctor if action is needed
         String action = checkIn.getActionRecommended();
-        if ("CONTACT_DOCTOR".equals(action) || "EMERGENCY".equals(action) || "BOOK_FOLLOWUP".equals(action)) {
+        if ("CONTACT_DOCTOR".equals(action) || "EMERGENCY".equals(action)
+                || "BOOK_FOLLOWUP".equals(action)) {
             plan.setStatus("ESCALATED");
             planRepository.save(plan);
-            
+
             eventPublisher.publishEvent(new NotificationEvent(
-                this,
-                plan.getDoctorId(),
-                "Patient Escalation Alert",
-                "Your patient for plan " + plan.getId() + " requires attention. Recommended action: " + action,
-                NotificationType.FOLLOWUP_ESCALATION,
-                plan.getId().toString()
+                    this,
+                    plan.getDoctorId(),
+                    "Patient Escalation Alert",
+                    "Your patient (plan " + plan.getId() + ") requires attention. "
+                            + "Recommended action: " + action,
+                    NotificationType.FOLLOWUP_ESCALATION,
+                    plan.getId().toString()
             ));
         }
 
@@ -149,18 +179,21 @@ public class FollowUpAssistantService {
     }
 
     public List<FollowUpCheckInResponse> getCheckInsForPlan(UUID planId) {
-        return checkInRepository.findByFollowUpPlanIdOrderByDayNumberAsc(planId).stream()
+        return checkInRepository.findByFollowUpPlanIdOrderByDayNumberAsc(planId)
+                .stream()
                 .map(this::mapToCheckInResponse)
                 .collect(Collectors.toList());
     }
 
+    /** Compute adherence % and recovery trend from the check-in history. */
     public FollowUpProgressResponse getProgressSummary(UUID planId) {
         FollowUpPlan plan = getPlan(planId);
-        List<FollowUpCheckIn> checkIns = checkInRepository.findByFollowUpPlanIdOrderByDayNumberAsc(planId);
-        
+        List<FollowUpCheckIn> checkIns =
+                checkInRepository.findByFollowUpPlanIdOrderByDayNumberAsc(planId);
+
         FollowUpProgressResponse response = new FollowUpProgressResponse();
         response.setPlanId(planId);
-        
+
         if (checkIns.isEmpty()) {
             response.setOverallProgressSummary("No check-ins yet.");
             response.setAdherencePercentage(0.0);
@@ -168,21 +201,40 @@ public class FollowUpAssistantService {
             return response;
         }
 
-        long daysPassed = ChronoUnit.DAYS.between(plan.getStartDate(), LocalDate.now());
-        if (daysPassed == 0) daysPassed = 1;
-        response.setAdherencePercentage(Math.min(100.0, (checkIns.size() / (double)daysPassed) * 100));
+        // Adherence = actual check-ins / expected check-ins (capped at 100%)
+        long daysPassed = Math.max(1, ChronoUnit.DAYS.between(plan.getStartDate(), LocalDate.now()));
+        response.setAdherencePercentage(
+                Math.min(100.0, (checkIns.size() / (double) daysPassed) * 100));
 
-        String latestAnalysis = checkIns.get(checkIns.size() - 1).getAiAnalysis();
-        response.setOverallProgressSummary(latestAnalysis);
-        
-        String latestAction = checkIns.get(checkIns.size() - 1).getActionRecommended();
-        if ("CONTINUE".equals(latestAction)) {
-            response.setRecoveryTrend("IMPROVING");
-        } else {
-            response.setRecoveryTrend("WORSENING");
-        }
+        FollowUpCheckIn latest = checkIns.get(checkIns.size() - 1);
+        response.setOverallProgressSummary(latest.getAiAnalysis());
+        response.setRecoveryTrend("CONTINUE".equals(latest.getActionRecommended())
+                ? "IMPROVING" : "WORSENING");
 
         return response;
+    }
+
+    /** Runs at 9 AM daily. Sends a reminder to every patient with an active plan. */
+    @Scheduled(cron = "0 0 9 * * *")
+    public void sendDailyReminders() {
+        List<FollowUpPlan> activePlans = planRepository.findByStatus("ACTIVE");
+        for (FollowUpPlan plan : activePlans) {
+            if (!LocalDate.now().isAfter(plan.getEndDate())) {
+                // Plan is still within its monitoring window — remind the patient
+                eventPublisher.publishEvent(new NotificationEvent(
+                        this,
+                        plan.getPatientId(),
+                        "Daily Follow-up Check-in",
+                        "It's time for your daily recovery check-in.",
+                        NotificationType.FOLLOWUP_REMINDER,
+                        plan.getId().toString()
+                ));
+            } else {
+                // Monitoring window expired — mark the plan as complete
+                plan.setStatus("COMPLETED");
+                planRepository.save(plan);
+            }
+        }
     }
 
     private FollowUpCheckInResponse mapToCheckInResponse(FollowUpCheckIn checkIn) {
@@ -195,25 +247,5 @@ public class FollowUpAssistantService {
         response.setActionRecommended(checkIn.getActionRecommended());
         response.setCreatedAt(checkIn.getCreatedAt());
         return response;
-    }
-
-    @Scheduled(cron = "0 0 9 * * *") // Run at 9 AM every day
-    public void sendDailyReminders() {
-        List<FollowUpPlan> activePlans = planRepository.findByStatus("ACTIVE");
-        for (FollowUpPlan plan : activePlans) {
-            if (!LocalDate.now().isAfter(plan.getEndDate())) {
-                eventPublisher.publishEvent(new NotificationEvent(
-                    this,
-                    plan.getPatientId(),
-                    "Daily Follow-up Check-in",
-                    "It's time for your daily recovery check-in for your recent consultation.",
-                    NotificationType.FOLLOWUP_REMINDER,
-                    plan.getId().toString()
-                ));
-            } else {
-                plan.setStatus("COMPLETED");
-                planRepository.save(plan);
-            }
-        }
     }
 }

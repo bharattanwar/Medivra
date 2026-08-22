@@ -4,6 +4,8 @@ import com.app.ai.entity.AiInteraction;
 import com.app.ai.repository.AiInteractionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -13,13 +15,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Low-level client for Google Gemini API.
+ *
+ * Handles three call patterns:
+ *   1. Plain text prompt   → analyzeText()
+ *   2. Structured JSON out → generateStructuredJson()
+ *   3. Image (base-64)    → analyzeImage()
+ *
+ * Every call is logged to the AiInteraction table so we can
+ * track latency, model version, and usage over time.
+ */
 @Service
 public class GeminiService {
+
+    private static final Logger log = LoggerFactory.getLogger(GeminiService.class);
+    private static final String GEMINI_BASE_URL =
+            "https://generativelanguage.googleapis.com/v1beta/models/";
 
     private final RestTemplate restTemplate;
     private final AiInteractionRepository interactionRepository;
@@ -40,108 +58,143 @@ public class GeminiService {
         this.objectMapper = new ObjectMapper();
     }
 
+    /** Send a plain-text prompt and get a text response. */
     public String analyzeText(String prompt, String interactionType, UUID userId) {
         return callGeminiApi(modelText, prompt, null, null, interactionType, userId);
     }
 
-    public String generateStructuredJson(String prompt, String schema, String interactionType, UUID userId) {
-        String fullPrompt = prompt + "\n\nProvide the output in JSON format exactly matching this schema:\n" + schema;
+    /**
+     * Send a prompt and ask Gemini to respond in JSON matching the given schema.
+     * The schema is appended to the prompt so the model knows what shape to return.
+     */
+    public String generateStructuredJson(String prompt, String schema,
+                                         String interactionType, UUID userId) {
+        String fullPrompt = prompt
+                + "\n\nProvide the output in JSON format exactly matching this schema:\n"
+                + schema;
         return callGeminiApi(modelText, fullPrompt, null, null, interactionType, userId);
     }
 
-    public String analyzeImage(String prompt, byte[] imageBytes, String mimeType, String interactionType, UUID userId) {
-        String base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes);
+    /**
+     * Send an image alongside a text prompt (e.g., for report or prescription analysis).
+     * The image is base-64 encoded and sent inline.
+     */
+    public String analyzeImage(String prompt, byte[] imageBytes, String mimeType,
+                                String interactionType, UUID userId) {
+        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
         return callGeminiApi(modelVision, prompt, base64Image, mimeType, interactionType, userId);
     }
 
-    private String callGeminiApi(String model, String prompt, String base64Image, String mimeType,
-            String interactionType, UUID userId) {
-        long startTime = System.currentTimeMillis();
-        System.out.println("TEXT MODEL = " + modelText);
-        System.out.println("VISION MODEL = " + modelVision);
-        System.out.println("MODEL PASSED = " + model);
+    // ── Core API caller ──────────────────────────────────────────────────────
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key="
-                + apiKey;
-        System.out.println("========== GEMINI DEBUG ==========");
-        System.out.println("API KEY = [" + apiKey + "]");
-        System.out.println("MODEL = " + model);
-        System.out.println("URL = " + url);
-        System.out.println("==================================");
+    private String callGeminiApi(String model, String prompt, String base64Image,
+                                  String mimeType, String interactionType, UUID userId) {
+        long startTime = System.currentTimeMillis();
+
+        String url = GEMINI_BASE_URL + model + ":generateContent?key=" + apiKey;
+        log.debug("Calling Gemini model={} interactionType={}", model, interactionType);
 
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            Map<String, Object> requestBody = new HashMap<>();
-            List<Map<String, Object>> contents = new ArrayList<>();
-            Map<String, Object> content = new HashMap<>();
+            // Build the request body: { contents: [{ parts: [textPart, ?imagePart] }] }
             List<Map<String, Object>> parts = new ArrayList<>();
 
             Map<String, Object> textPart = new HashMap<>();
             textPart.put("text", prompt);
             parts.add(textPart);
 
+            // Attach image if provided (vision requests only)
             if (base64Image != null && mimeType != null) {
                 Map<String, Object> inlineData = new HashMap<>();
                 inlineData.put("mimeType", mimeType);
                 inlineData.put("data", base64Image);
+
                 Map<String, Object> imagePart = new HashMap<>();
                 imagePart.put("inlineData", inlineData);
                 parts.add(imagePart);
             }
 
+            Map<String, Object> content = new HashMap<>();
             content.put("parts", parts);
-            contents.add(content);
-            requestBody.put("contents", contents);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("contents", List.of(content));
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
             ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
 
             long latencyMs = System.currentTimeMillis() - startTime;
-
             String responseText = extractTextFromResponse(response.getBody());
 
             logInteraction(userId, interactionType, prompt, responseText, model, latencyMs);
 
-            // Clean up markdown json block if it exists
-            if (responseText.startsWith("```json")) {
-                responseText = responseText.substring(7);
-                if (responseText.endsWith("```")) {
-                    responseText = responseText.substring(0, responseText.length() - 3);
-                }
-            }
+            // Strip markdown code fences that Gemini sometimes wraps JSON in
+            responseText = stripMarkdownFences(responseText);
 
-            return responseText.trim();
+            log.debug("Gemini call complete latency={}ms interactionType={}", latencyMs, interactionType);
+            return responseText;
+
         } catch (Exception e) {
             long latencyMs = System.currentTimeMillis() - startTime;
             logInteraction(userId, interactionType, prompt, "ERROR: " + e.getMessage(), model, latencyMs);
-            throw new RuntimeException("Failed to call Gemini API: " + e.getMessage());
+            throw new RuntimeException("Failed to call Gemini API: " + e.getMessage(), e);
         }
     }
 
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Pull the text out of the Gemini candidates[0].content.parts[0].text path. */
     private String extractTextFromResponse(String responseBody) throws Exception {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode candidates = root.path("candidates");
-        if (candidates.isArray() && candidates.size() > 0) {
+        if (candidates.isArray() && !candidates.isEmpty()) {
             JsonNode parts = candidates.get(0).path("content").path("parts");
-            if (parts.isArray() && parts.size() > 0) {
+            if (parts.isArray() && !parts.isEmpty()) {
                 return parts.get(0).path("text").asText();
             }
         }
         return "";
     }
 
-    private void logInteraction(UUID userId, String type, String prompt, String response, String model,
-            long latencyMs) {
-        AiInteraction interaction = new AiInteraction();
-        interaction.setUserId(userId);
-        interaction.setInteractionType(type);
-        interaction.setRequestSummary(prompt.length() > 500 ? prompt.substring(0, 500) + "..." : prompt);
-        interaction.setResponseText(response);
-        interaction.setModelUsed(model);
-        interaction.setLatencyMs(latencyMs);
-        interactionRepository.save(interaction);
+    /**
+     * Gemini occasionally wraps JSON responses in ```json ... ``` fences.
+     * Strip them so callers always get clean JSON.
+     */
+    private String stripMarkdownFences(String text) {
+        String trimmed = text.trim();
+        if (trimmed.startsWith("```json")) {
+            trimmed = trimmed.substring(7);
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+        } else if (trimmed.startsWith("```")) {
+            trimmed = trimmed.substring(3);
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+        }
+        return trimmed.trim();
+    }
+
+    /** Persist an interaction record for auditing and latency tracking. */
+    private void logInteraction(UUID userId, String type, String prompt,
+                                 String response, String model, long latencyMs) {
+        try {
+            AiInteraction interaction = new AiInteraction();
+            interaction.setUserId(userId);
+            interaction.setInteractionType(type);
+            // Truncate long prompts so we don't bloat the DB
+            interaction.setRequestSummary(
+                    prompt.length() > 500 ? prompt.substring(0, 500) + "..." : prompt);
+            interaction.setResponseText(response);
+            interaction.setModelUsed(model);
+            interaction.setLatencyMs(latencyMs);
+            interactionRepository.save(interaction);
+        } catch (Exception e) {
+            // Never let logging failures break the actual AI response
+            log.warn("Failed to persist AI interaction log: {}", e.getMessage());
+        }
     }
 }
