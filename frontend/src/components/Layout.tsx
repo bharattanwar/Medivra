@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useWebSocket } from '../context/WebSocketContext';
 import NotificationBell from './NotificationBell';
-import { X, Calendar, CreditCard, FileText, Sparkles } from 'lucide-react';
+import PreJoinCallModal, { type PreJoinAppointmentInfo } from './PreJoinCallModal';
+import { X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall } from 'lucide-react';
 
 /** Returns true if a JWT token string is expired (or unparseable). */
 const isTokenExpired = (token: string): boolean => {
@@ -38,6 +39,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const isPatient = role === 'PATIENT';
 
   const { toasts, removeToast } = useWebSocket();
+  const [preJoinApt, setPreJoinApt] = useState<PreJoinAppointmentInfo | null>(null);
+  const [isPreJoinOpen, setIsPreJoinOpen] = useState(false);
+
+  const handleOpenPreJoin = (apt: PreJoinAppointmentInfo) => {
+    setPreJoinApt(apt);
+    setIsPreJoinOpen(true);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -151,7 +159,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
                   {/* Real-time Notification Bell Center */}
                   <div className="ml-2 mr-1">
-                    <NotificationBell />
+                    <NotificationBell onOpenPreJoin={handleOpenPreJoin} />
                   </div>
 
                   <button
@@ -199,11 +207,22 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
       <main className="flex-1 flex flex-col">{children}</main>
 
+      {/* Global Pre-Join Call Re-Check Confirmation Modal */}
+      <PreJoinCallModal
+        isOpen={isPreJoinOpen}
+        onClose={() => setIsPreJoinOpen(false)}
+        appointment={preJoinApt}
+      />
+
       {/* Real-Time Toast Popup Container */}
-      <div className="fixed top-20 right-6 z-50 flex flex-col gap-3 pointer-events-none w-80 max-w-[90vw]">
+      <div className="fixed top-20 right-6 z-50 flex flex-col gap-3 pointer-events-none w-88 max-w-[92vw]">
         {toasts.map((toast) => {
+          const isCallWaiting = toast.type === 'CALL_WAITING';
+
           const getToastIcon = (type: string) => {
             switch (type) {
+              case 'CALL_WAITING':
+                return <Video className="w-5 h-5 text-blue-600 animate-pulse" />;
               case 'APPOINTMENT_BOOKED':
               case 'APPOINTMENT_CONFIRMED':
                 return <Calendar className="w-5 h-5 text-blue-600" />;
@@ -218,6 +237,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
           const getToastBg = (type: string) => {
             switch (type) {
+              case 'CALL_WAITING':
+                return 'bg-gradient-to-r from-blue-50/98 to-indigo-50/98 border-blue-300 shadow-blue-500/20 ring-1 ring-blue-400/30';
               case 'APPOINTMENT_BOOKED':
               case 'APPOINTMENT_CONFIRMED':
                 return 'bg-blue-50/95 border-blue-100';
@@ -233,27 +254,59 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto p-4 rounded-2xl shadow-2xl border flex items-start space-x-3 w-full bg-white/95 backdrop-blur-md transform transition-all duration-300 animate-in slide-in-from-right-10 ${getToastBg(
+              className={`pointer-events-auto p-4 rounded-2xl shadow-2xl border flex flex-col space-y-2.5 w-full bg-white/95 backdrop-blur-md transform transition-all duration-300 animate-in slide-in-from-right-10 ${getToastBg(
                 toast.type
               )}`}
             >
-              <div className="shrink-0 p-2 bg-white rounded-xl shadow-sm border border-slate-100">
-                {getToastIcon(toast.type)}
+              <div className="flex items-start space-x-3 w-full">
+                <div className="shrink-0 p-2 bg-white rounded-xl shadow-sm border border-slate-100">
+                  {getToastIcon(toast.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-bold uppercase tracking-wider ${isCallWaiting ? 'text-blue-700' : 'text-slate-800'}`}>
+                      {toast.title}
+                    </p>
+                    {isCallWaiting && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    {toast.message}
+                  </p>
+                </div>
+                <button
+                  onClick={() => removeToast(toast.id)}
+                  className="shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  {toast.title}
-                </p>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  {toast.message}
-                </p>
-              </div>
-              <button
-                onClick={() => removeToast(toast.id)}
-                className="shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              {/* Action Button for CALL_WAITING */}
+              {isCallWaiting && (
+                <div className="pt-1 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (toast.relatedEntityId) {
+                        handleOpenPreJoin({
+                          id: toast.relatedEntityId,
+                          callerName: toast.title.includes('Doctor') ? 'Doctor' : 'Patient',
+                          isWaiting: true
+                        });
+                      }
+                      removeToast(toast.id);
+                    }}
+                    className="w-full py-2 px-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5" />
+                    Review & Join Consultation
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

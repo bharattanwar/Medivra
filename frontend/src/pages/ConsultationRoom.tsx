@@ -52,6 +52,7 @@ const ConsultationRoom: React.FC = () => {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const hasSentJoinRef = useRef(false);
 
   // Fetch Appointment Details & Determine Roles
   useEffect(() => {
@@ -128,13 +129,16 @@ const ConsultationRoom: React.FC = () => {
   useEffect(() => {
     if (!client || !isConnected || !localStream || !appointmentId) return;
 
-    // Send "JOIN" signal so existing peer knows we joined
-    console.log('Sending JOIN signal for appointment:', appointmentId);
-    sendMessage('/app/video.signal', {
-      appointmentId,
-      type: 'JOIN',
-      payload: null
-    });
+    // Send "JOIN" signal once when entering the room
+    if (!hasSentJoinRef.current) {
+      console.log('Sending JOIN signal for appointment:', appointmentId);
+      sendMessage('/app/video.signal', {
+        appointmentId,
+        type: 'JOIN',
+        payload: null
+      });
+      hasSentJoinRef.current = true;
+    }
 
     // Subscribe to video signals destined for us
     const subscription = client.subscribe('/user/queue/video.signal', (message) => {

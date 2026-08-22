@@ -1,14 +1,16 @@
 import React, { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../context/WebSocketContext';
-import { Bell, Check, CheckCheck, CreditCard, FileText, Calendar, Sparkles, Inbox } from 'lucide-react';
+import { Bell, Check, CheckCheck, CreditCard, FileText, Calendar, Sparkles, Inbox, Video } from 'lucide-react';
+import type { PreJoinAppointmentInfo } from './PreJoinCallModal';
 
 interface NotificationDropdownProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenPreJoin?: (apt: PreJoinAppointmentInfo) => void;
 }
 
-const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOpen, onClose }) => {
+const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOpen, onClose, onOpenPreJoin }) => {
   const navigate = useNavigate();
   const { notifications, markAsRead, markAllAsRead } = useWebSocket();
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -35,8 +37,23 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOpen, onC
     if (!n.read) {
       await markAsRead(n.id);
     }
-    // Redirect based on type
-    if (n.type === 'APPOINTMENT_BOOKED' || n.type === 'APPOINTMENT_CONFIRMED') {
+    // Redirect / open based on type
+    if (n.type === 'CALL_WAITING') {
+      if (n.relatedEntityId && onOpenPreJoin) {
+        onOpenPreJoin({
+          id: n.relatedEntityId,
+          callerName: n.title.includes('Doctor') ? 'Doctor' : 'Patient',
+          isWaiting: true
+        });
+      } else {
+        const role = localStorage.getItem('role');
+        if (role === 'DOCTOR') {
+          navigate('/doctor/appointments');
+        } else {
+          navigate('/patient/appointments');
+        }
+      }
+    } else if (n.type === 'APPOINTMENT_BOOKED' || n.type === 'APPOINTMENT_CONFIRMED') {
       const role = localStorage.getItem('role');
       if (role === 'DOCTOR') {
         navigate('/doctor/appointments');
@@ -53,6 +70,8 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOpen, onC
 
   const getIcon = (type: string) => {
     switch (type) {
+      case 'CALL_WAITING':
+        return <Video className="w-5 h-5 text-blue-600 animate-pulse" />;
       case 'APPOINTMENT_BOOKED':
       case 'APPOINTMENT_CONFIRMED':
         return <Calendar className="w-5 h-5 text-blue-600" />;
@@ -67,6 +86,8 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOpen, onC
 
   const getBgIcon = (type: string) => {
     switch (type) {
+      case 'CALL_WAITING':
+        return 'bg-blue-100 border-blue-200';
       case 'APPOINTMENT_BOOKED':
       case 'APPOINTMENT_CONFIRMED':
         return 'bg-blue-50 border-blue-100';

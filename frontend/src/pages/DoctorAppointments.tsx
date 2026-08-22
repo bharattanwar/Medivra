@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import UploadPrescriptionModal from '../components/UploadPrescriptionModal';
 import ChatWindow from '../components/chat/ChatWindow';
 import CancelReasonModal from '../components/CancelReasonModal';
 import RescheduleModal from '../components/RescheduleModal';
+import PreJoinCallModal, { type PreJoinAppointmentInfo } from '../components/PreJoinCallModal';
 import { isAppointmentElapsed, isCancelable } from '../utils/appointmentUtils';
 
 interface Appointment {
@@ -24,12 +24,12 @@ interface Appointment {
 }
 
 const DoctorAppointments: React.FC = () => {
-  const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [activeChat, setActiveChat] = useState<{ conversationId: string, patientName: string, patientId: string } | null>(null);
+  const [preJoinApt, setPreJoinApt] = useState<PreJoinAppointmentInfo | null>(null);
 
   // Modal states
   const [cancelModalApt, setCancelModalApt] = useState<{ id: string; mode: 'cancel' | 'reject' } | null>(null);
@@ -194,8 +194,16 @@ const DoctorAppointments: React.FC = () => {
                             </button>
                             {apt.consultationType !== 'IN_CLINIC' && (
                               <button 
-                                onClick={() => navigate(`/consultation/${apt.id}`)}
-                                className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5"
+                                onClick={() => setPreJoinApt({
+                                  id: apt.id,
+                                  doctorId: apt.doctorId,
+                                  doctorName: apt.doctorName,
+                                  patientId: apt.patientId,
+                                  patientName: apt.patientName,
+                                  appointmentDate: apt.appointmentDate,
+                                  timeSlot: apt.timeSlot
+                                })}
+                                className="flex-1 lg:flex-initial h-9 bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-xl font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center text-xs gap-1.5 cursor-pointer"
                               >
                                 📹 Join Video Call
                               </button>
@@ -358,6 +366,12 @@ const DoctorAppointments: React.FC = () => {
             }}
           />
         )}
+
+        <PreJoinCallModal
+          isOpen={!!preJoinApt}
+          onClose={() => setPreJoinApt(null)}
+          appointment={preJoinApt}
+        />
       </div>
     </div>
   );

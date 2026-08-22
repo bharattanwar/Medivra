@@ -5,6 +5,7 @@ import { processConsultationPayment } from '../components/PaymentCheckout';
 import ChatWindow from '../components/chat/ChatWindow';
 import CancelReasonModal from '../components/CancelReasonModal';
 import RescheduleModal from '../components/RescheduleModal';
+import PreJoinCallModal, { type PreJoinAppointmentInfo } from '../components/PreJoinCallModal';
 import { isAppointmentElapsed, isCancelable } from '../utils/appointmentUtils';
 
 interface Appointment {
@@ -27,6 +28,7 @@ const MyAppointments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<{ conversationId: string, doctorName: string, doctorId: string } | null>(null);
+  const [preJoinApt, setPreJoinApt] = useState<PreJoinAppointmentInfo | null>(null);
 
   // Modal states
   const [cancelModalApt, setCancelModalApt] = useState<{ id: string } | null>(null);
@@ -269,8 +271,14 @@ const MyAppointments: React.FC = () => {
                             </button>
                             {apt.consultationType !== 'IN_CLINIC' && (
                               <button
-                                onClick={() => navigate(`/consultation/${apt.id}`)}
-                                className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1"
+                                onClick={() => setPreJoinApt({
+                                  id: apt.id,
+                                  doctorId: apt.doctorId,
+                                  doctorName: apt.doctorName,
+                                  appointmentDate: apt.appointmentDate,
+                                  timeSlot: apt.timeSlot
+                                })}
+                                className="flex-1 md:flex-initial bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
                               >
                                 📹 Join Call
                               </button>
@@ -405,6 +413,12 @@ const MyAppointments: React.FC = () => {
           }}
         />
       )}
+
+      <PreJoinCallModal
+        isOpen={!!preJoinApt}
+        onClose={() => setPreJoinApt(null)}
+        appointment={preJoinApt}
+      />
     </div>
   );
 };

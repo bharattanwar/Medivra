@@ -9,6 +9,7 @@ export interface Toast {
   title: string;
   message: string;
   type: string;
+  relatedEntityId?: string;
 }
 
 interface WebSocketContextType {
@@ -98,12 +99,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
   };
 
-  const showToast = (title: string, message: string, type: string) => {
+  const showToast = (title: string, message: string, type: string, relatedEntityId?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, title, message, type }]);
+    setToasts(prev => [...prev, { id, title, message, type, relatedEntityId }]);
+    
+    // For call waiting notifications, keep toast visible longer (15s) so user has time to click Join
+    const timeoutDuration = type === 'CALL_WAITING' ? 15000 : 5000;
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    }, timeoutDuration);
   };
 
   const removeToast = (id: string) => {
@@ -148,7 +152,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             const notification = JSON.parse(msg.body);
             setNotifications((prev) => [notification, ...prev]);
             setUnreadCount((prev) => prev + 1);
-            showToast(notification.title, notification.message, notification.type);
+            showToast(notification.title, notification.message, notification.type, notification.relatedEntityId);
           }
         });
 

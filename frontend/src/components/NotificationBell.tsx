@@ -2,8 +2,13 @@ import React, { useState } from 'react';
 import { useWebSocket } from '../context/WebSocketContext';
 import NotificationDropdown from './NotificationDropdown';
 import { Bell } from 'lucide-react';
+import type { PreJoinAppointmentInfo } from './PreJoinCallModal';
 
-const NotificationBell: React.FC = () => {
+interface NotificationBellProps {
+  onOpenPreJoin?: (apt: PreJoinAppointmentInfo) => void;
+}
+
+const NotificationBell: React.FC<NotificationBellProps> = ({ onOpenPreJoin }) => {
   const { unreadCount } = useWebSocket();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -11,7 +16,8 @@ const NotificationBell: React.FC = () => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-xl text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all focus:outline-none border border-transparent hover:border-blue-100 shadow-sm hover:shadow"
+        className="relative p-2 rounded-xl text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all focus:outline-none border border-transparent hover:border-blue-100 shadow-sm hover:shadow cursor-pointer"
+        title="Notifications"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -21,7 +27,11 @@ const NotificationBell: React.FC = () => {
         )}
       </button>
 
-      <NotificationDropdown isOpen={isOpen} onClose={() => setIsOpen(false)} />
+      <NotificationDropdown 
+        isOpen={isOpen} 
+        onClose={() => setIsOpen(false)} 
+        onOpenPreJoin={onOpenPreJoin}
+      />
     </div>
   );
 };
