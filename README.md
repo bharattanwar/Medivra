@@ -216,8 +216,3 @@ Medivra features granular Role-Based Access Control (RBAC):
 - **Optimistic Concurrency Control**: Emergency ride acceptances utilize database version checks to eliminate race conditions.
 - **Clean Architecture & Scalability**: Service-oriented modular isolation guarantees that independent modules (e.g. pharmacy matching vs. AI analysis) do not introduce circular dependencies.
 - **Zero-Crash Event Publishing**: Background notification and email events are executed asynchronously with safety wrappers, ensuring transaction integrity.
-
----
-
-## 📄 License
-This project is licensed under the [MIT License](LICENSE).
