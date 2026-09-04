@@ -392,6 +392,90 @@ public class AppointmentService {
         return mapToResponse(saved);
     }
 
+    @Transactional
+    public AppointmentResponse completeAppointment(UUID id, UUID requestedByUserId) {
+        Appointment appointment = appointmentRepository.findByIdWithParties(id)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+
+        AppointmentStatus currentStatus = appointment.getStatus();
+        if (currentStatus != AppointmentStatus.CONFIRMED && currentStatus != AppointmentStatus.IN_PROGRESS) {
+            throw new RuntimeException(
+                    "Only CONFIRMED or IN_PROGRESS appointments can be completed. Current: " + currentStatus);
+        }
+
+        // Only the doctor on this appointment may complete it
+        UUID doctorUserId = appointment.getDoctor().getUserId();
+        if (!doctorUserId.equals(requestedByUserId)) {
+            throw new RuntimeException("Only the assigned doctor can mark this appointment as completed.");
+        }
+
+        appointment.setStatus(AppointmentStatus.COMPLETED);
+        Appointment saved = appointmentRepository.save(appointment);
+
+        // Notify the patient that their consultation is complete
+        publishEvent(new NotificationEvent(
+                this,
+                appointment.getPatient().getId(),
+                "Consultation Completed",
+                String.format("Your consultation with Dr. %s on %s at %s has been marked as completed.",
+                        appointment.getDoctor().getUser().getFullName(),
+                        appointment.getAppointmentDate(),
+                        appointment.getTimeSlot()),
+                NotificationType.APPOINTMENT_COMPLETED,
+                saved.getId().toString()
+        ), "AppointmentCompleted notification");
+
+        return mapToResponse(saved);
+    }
+
+    /**
+     * Auto-completes a video consultation when both participants have left the room.
+     * Called internally by VideoSignalingController — does NOT check who is calling,
+     * since this is a system-triggered action (not user-triggered).
+     */
+    @Transactional
+    public void autoCompleteVideoConsultation(UUID appointmentId) {
+        appointmentRepository.findByIdWithParties(appointmentId).ifPresent(appointment -> {
+            AppointmentStatus status = appointment.getStatus();
+            if (status != AppointmentStatus.CONFIRMED && status != AppointmentStatus.IN_PROGRESS) {
+                log.info("Skipping auto-complete for appointment {} — status is {}", appointmentId, status);
+                return;
+            }
+            if (appointment.getConsultationType() != com.app.appointment.entity.ConsultationType.ONLINE) {
+                log.info("Skipping auto-complete for appointment {} — not an ONLINE consultation", appointmentId);
+                return;
+            }
+
+            appointment.setStatus(AppointmentStatus.COMPLETED);
+            appointmentRepository.save(appointment);
+            log.info("Auto-completed video consultation for appointment {}", appointmentId);
+
+            publishEvent(new NotificationEvent(
+                    this,
+                    appointment.getPatient().getId(),
+                    "Consultation Completed",
+                    String.format("Your video consultation with Dr. %s on %s at %s has been completed. Thank you!",
+                            appointment.getDoctor().getUser().getFullName(),
+                            appointment.getAppointmentDate(),
+                            appointment.getTimeSlot()),
+                    NotificationType.APPOINTMENT_COMPLETED,
+                    appointmentId.toString()
+            ), "AutoComplete notification to patient");
+
+            publishEvent(new NotificationEvent(
+                    this,
+                    appointment.getDoctor().getUserId(),
+                    "Consultation Completed",
+                    String.format("Your video consultation with %s on %s at %s has been marked as completed.",
+                            appointment.getPatient().getFullName(),
+                            appointment.getAppointmentDate(),
+                            appointment.getTimeSlot()),
+                    NotificationType.APPOINTMENT_COMPLETED,
+                    appointmentId.toString()
+            ), "AutoComplete notification to doctor");
+        });
+    }
+
     // ── Query methods ────────────────────────────────────────────────────────
 
     public List<AppointmentResponse> getAppointmentsByPatient(UUID patientId) {

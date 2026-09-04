@@ -2,6 +2,7 @@ package com.app.chat.controller;
 
 import com.app.appointment.entity.Appointment;
 import com.app.appointment.repository.AppointmentRepository;
+import com.app.appointment.service.AppointmentService;
 import com.app.chat.dto.VideoSignalMessage;
 import com.app.common.entity.NotificationType;
 import com.app.common.event.NotificationEvent;
@@ -35,6 +36,7 @@ public class VideoSignalingController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final AppointmentRepository appointmentRepository;
+    private final AppointmentService appointmentService;
     private final ApplicationEventPublisher eventPublisher;
 
     // Track active participants present in each consultation room: appointmentId -> Set of senderEmails
@@ -45,9 +47,11 @@ public class VideoSignalingController {
 
     public VideoSignalingController(SimpMessagingTemplate messagingTemplate,
                                     AppointmentRepository appointmentRepository,
+                                    AppointmentService appointmentService,
                                     ApplicationEventPublisher eventPublisher) {
         this.messagingTemplate = messagingTemplate;
         this.appointmentRepository = appointmentRepository;
+        this.appointmentService = appointmentService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -147,6 +151,14 @@ public class VideoSignalingController {
                     if (participants.isEmpty()) {
                         activeRoomParticipants.remove(appointmentId);
                         lastWaitingNotificationTime.remove(appointmentId);
+
+                        // Both participants have left — auto-complete the video consultation
+                        log.info("All participants left room for appointment {}. Triggering auto-complete.", appointmentId);
+                        try {
+                            appointmentService.autoCompleteVideoConsultation(appointmentId);
+                        } catch (Exception e) {
+                            log.warn("Failed to auto-complete video consultation {}: {}", appointmentId, e.getMessage());
+                        }
                     }
                 }
             }

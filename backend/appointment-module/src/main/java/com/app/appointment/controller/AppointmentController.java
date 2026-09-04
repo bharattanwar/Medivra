@@ -85,4 +85,11 @@ public class AppointmentController {
     public ResponseEntity<AppointmentResponse> rejectReschedule(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.rejectReschedule(id));
     }
+
+    @PutMapping("/{id}/complete")
+    public ResponseEntity<AppointmentResponse> completeAppointment(
+            @PathVariable UUID id,
+            @RequestParam UUID requestedByUserId) {
+        return ResponseEntity.ok(appointmentService.completeAppointment(id, requestedByUserId));
+    }
 }
