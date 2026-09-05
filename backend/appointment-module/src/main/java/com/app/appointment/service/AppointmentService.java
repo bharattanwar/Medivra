@@ -130,20 +130,21 @@ public class AppointmentService {
                     "InClinicBookingEvent");
         }
 
-        // Notify the doctor about the new booking
-        boolean isInClinic = consultationType == ConsultationType.IN_CLINIC;
-        publishEvent(new NotificationEvent(
-                this,
-                doctor.getUserId(),
-                isInClinic ? "New In-Clinic Consultation Booked" : "New Appointment Request",
-                String.format("You have a new %s booking from %s for %s at %s.",
-                        isInClinic ? "in-clinic (pay at clinic)" : "online consultation",
-                        patient.getFullName(),
-                        saved.getAppointmentDate(),
-                        saved.getTimeSlot()),
-                isInClinic ? NotificationType.APPOINTMENT_CONFIRMED : NotificationType.APPOINTMENT_BOOKED,
-                saved.getId().toString()
-        ), "AppointmentBooked notification");
+        // Notify the doctor immediately for confirmed in-clinic bookings (pay at clinic).
+        // For online video consultations, the doctor is notified after successful payment verification in PaymentService.
+        if (consultationType == ConsultationType.IN_CLINIC) {
+            publishEvent(new NotificationEvent(
+                    this,
+                    doctor.getUserId(),
+                    "New In-Clinic Consultation Booked",
+                    String.format("You have a new in-clinic (pay at clinic) booking from %s for %s at %s.",
+                            patient.getFullName(),
+                            saved.getAppointmentDate(),
+                            saved.getTimeSlot()),
+                    NotificationType.APPOINTMENT_CONFIRMED,
+                    saved.getId().toString()
+            ), "AppointmentBooked notification");
+        }
 
         return mapToResponse(saved);
     }
@@ -485,7 +486,10 @@ public class AppointmentService {
 
     public List<AppointmentResponse> getAppointmentsByDoctor(UUID doctorId) {
         return appointmentRepository.findByDoctorIdOrderByAppointmentDateDesc(doctorId)
-                .stream().map(this::mapToResponse).collect(Collectors.toList());
+                .stream()
+                .filter(a -> a.getStatus() != AppointmentStatus.PENDING || a.getConsultationType() == ConsultationType.IN_CLINIC)
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
     public List<AppointmentResponse> getAppointmentsByDoctorUserId(UUID userId) {

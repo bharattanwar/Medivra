@@ -2,9 +2,11 @@ package com.app.notification.controller;
 
 import com.app.common.dto.ApiResponse;
 import com.app.notification.dto.NotificationResponse;
+import com.app.notification.dto.PushTokenRequest;
 import com.app.notification.service.NotificationService;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -72,5 +74,27 @@ public class NotificationController {
         }
         notificationService.markAllAsRead(userOpt.get().getId());
         return ResponseEntity.ok(ApiResponse.success(null, "All notifications marked as read"));
+    }
+
+    @PostMapping("/push-token")
+    public ResponseEntity<ApiResponse<Void>> registerPushToken(@Valid @RequestBody PushTokenRequest request,
+                                                               Authentication authentication) {
+        Optional<User> userOpt = resolveAuthenticatedUser(authentication);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(401).build();
+        }
+        notificationService.registerPushToken(userOpt.get().getId(), request.getToken(), request.getDeviceType());
+        return ResponseEntity.ok(ApiResponse.success(null, "Push token registered successfully"));
+    }
+
+    @DeleteMapping("/push-token")
+    public ResponseEntity<ApiResponse<Void>> removePushToken(@Valid @RequestBody PushTokenRequest request,
+                                                             Authentication authentication) {
+        Optional<User> userOpt = resolveAuthenticatedUser(authentication);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(401).build();
+        }
+        notificationService.removePushToken(userOpt.get().getId(), request.getToken());
+        return ResponseEntity.ok(ApiResponse.success(null, "Push token removed successfully"));
     }
 }

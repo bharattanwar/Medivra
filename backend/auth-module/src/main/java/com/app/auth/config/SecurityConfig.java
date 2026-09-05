@@ -49,6 +49,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
                 "http://localhost:3000",
+                "http://localhost:8081",
                 "https://medivra.in",
                 "https://www.medivra.in"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
