@@ -5,14 +5,19 @@ import com.app.user.dto.AuthResponse;
 import com.app.pharmacy.dto.PharmacyRegisterRequest;
 import com.app.pharmacy.dto.InventoryRequest;
 import com.app.pharmacy.dto.InventoryResponse;
+import com.app.pharmacy.dto.InventoryImportConfirmRequest;
+import com.app.pharmacy.dto.InventoryImportResponse;
+import com.app.pharmacy.service.InventoryImportService;
 import com.app.pharmacy.service.PharmacyService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -20,9 +25,11 @@ import java.util.UUID;
 public class PharmacyController {
 
     private final PharmacyService pharmacyService;
+    private final InventoryImportService inventoryImportService;
 
-    public PharmacyController(PharmacyService pharmacyService) {
+    public PharmacyController(PharmacyService pharmacyService, InventoryImportService inventoryImportService) {
         this.pharmacyService = pharmacyService;
+        this.inventoryImportService = inventoryImportService;
     }
 
     @PostMapping("/register")
@@ -80,6 +87,34 @@ public class PharmacyController {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         List<InventoryResponse> response = pharmacyService.bulkUpdateInventory(userDetails.getUsername(), requests);
         return ResponseEntity.ok(ApiResponse.success(response, "Bulk inventory items updated successfully"));
+    }
+
+    @PostMapping("/inventory/import")
+    public ResponseEntity<ApiResponse<InventoryImportResponse>> importInventoryFile(
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        InventoryImportResponse response = inventoryImportService.processUpload(userDetails.getUsername(), file);
+        return ResponseEntity.ok(ApiResponse.success(response, "File processed and mapped successfully"));
+    }
+
+    @GetMapping("/inventory/import/{jobId}")
+    public ResponseEntity<ApiResponse<InventoryImportResponse>> getImportJob(
+            @PathVariable UUID jobId,
+            Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        InventoryImportResponse response = inventoryImportService.getImportJob(userDetails.getUsername(), jobId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Import job retrieved successfully"));
+    }
+
+    @PostMapping("/inventory/import/{jobId}/confirm")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> confirmImport(
+            @PathVariable UUID jobId,
+            @RequestBody InventoryImportConfirmRequest request,
+            Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        Map<String, Object> response = inventoryImportService.confirmImport(userDetails.getUsername(), jobId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Inventory import completed successfully"));
     }
 
     @GetMapping("/profile")

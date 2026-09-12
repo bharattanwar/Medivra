@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, Plus, Trash2, Edit3, Check, X, Search,
   Building2, MapPin, Phone, RefreshCw, AlertCircle, Loader2,
-  FileText, Download, CheckSquare, ShoppingCart, Clock, ArrowRight
+  FileText, Download, CheckSquare, ShoppingCart, Clock, ArrowRight,
+  Sparkles
 } from 'lucide-react';
 import api from '../services/api';
+import { SmartInventoryImportModal } from '../components/SmartInventoryImportModal';
 
 interface InventoryItem {
   id: string;
@@ -97,6 +99,9 @@ const PharmacyDashboard: React.FC = () => {
 
   // Delete
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Smart Bulk Import Modal
+  const [showSmartImport, setShowSmartImport] = useState(false);
 
   // Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -551,6 +556,14 @@ const PharmacyDashboard: React.FC = () => {
                   <RefreshCw className="h-4 w-4" />
                 </button>
                 
+                <button
+                  id="smart-import-btn"
+                  onClick={() => setShowSmartImport(true)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md shadow-amber-100 cursor-pointer"
+                >
+                  <Sparkles className="h-4 w-4 text-amber-200" /> AI Bulk Import
+                </button>
+
                 <button
                   id="add-medicine-btn"
                   onClick={() => setShowAdd(true)}
@@ -1037,6 +1050,13 @@ const PharmacyDashboard: React.FC = () => {
         )}
 
       </div>
+
+      {/* Smart Bulk Import Modal */}
+      <SmartInventoryImportModal
+        isOpen={showSmartImport}
+        onClose={() => setShowSmartImport(false)}
+        onImportSuccess={fetchInventory}
+      />
     </div>
   );
 };
