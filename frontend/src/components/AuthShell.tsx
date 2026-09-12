@@ -44,7 +44,7 @@ const AuthShell = ({ title, subtitle, children, footer }: AuthShellProps) => {
 
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10 bg-slate-50">
         <div className="w-full max-w-md animate-fade-in">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-8">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-5 sm:p-8">
             <div className="text-center mb-8">
               <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
               <p className="text-slate-500 mt-2 text-sm">{subtitle}</p>

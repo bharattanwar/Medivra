@@ -494,10 +494,10 @@ const ConsultationRoom: React.FC = () => {
       </header>
 
       {/* Main Grid View */}
-      <main className="flex-1 flex flex-col lg:flex-row p-6 gap-6 relative z-10 overflow-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row p-3 sm:p-6 gap-4 sm:gap-6 relative z-10 overflow-y-auto lg:overflow-hidden">
         
         {/* Stream viewports wrapper */}
-        <div className="flex-1 flex flex-col justify-center items-center gap-6 relative rounded-3xl bg-slate-900/40 border border-slate-800/60 p-4 overflow-hidden">
+        <div className="flex-1 flex flex-col justify-center items-center gap-6 relative rounded-3xl bg-slate-900/40 border border-slate-800/60 p-3 sm:p-4 overflow-hidden min-h-[360px] sm:min-h-[440px]">
           
           {errorMsg ? (
             <div className="max-w-md p-6 bg-rose-500/10 border border-rose-500/20 rounded-3xl text-center shadow-lg">
@@ -617,9 +617,9 @@ const ConsultationRoom: React.FC = () => {
       </main>
 
       {/* Floating Bottom Control Bar */}
-      <footer className="z-10 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pt-4 pb-8 px-6 flex justify-center">
+      <footer className="z-10 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pt-3 pb-6 px-3 sm:px-6 flex justify-center">
         
-        <div className="bg-slate-900/70 backdrop-blur-xl border border-slate-800/80 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-5 md:gap-8 max-w-lg w-full justify-center">
+        <div className="bg-slate-900/70 backdrop-blur-xl border border-slate-800/80 px-4 sm:px-6 py-3 sm:py-4 rounded-3xl shadow-2xl flex items-center gap-3 sm:gap-5 md:gap-8 max-w-lg w-full justify-center flex-wrap sm:flex-nowrap">
           
           {/* Mute Microphone */}
           <button 

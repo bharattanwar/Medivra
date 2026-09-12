@@ -243,20 +243,20 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">Doctor's Available Days</label>
               {loadingDays ? (
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
                   {DAY_SHORT.map(d => (
-                    <div key={d} className="flex-1 h-9 bg-gray-100 rounded-lg animate-pulse" />
+                    <div key={d} className="min-w-[40px] flex-1 h-9 bg-gray-100 rounded-lg animate-pulse" />
                   ))}
                 </div>
               ) : (
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
                   {DAYS_ORDER.map((day, idx) => {
                     const isAvailable = availableDays.has(day);
                     return (
                       <div
                         key={day}
                         title={isAvailable ? `Available on ${day.charAt(0) + day.slice(1).toLowerCase()}` : 'Not available'}
-                        className={`flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all ${isAvailable
+                        className={`min-w-[42px] flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all shrink-0 sm:shrink ${isAvailable
                             ? 'bg-blue-600 text-white shadow-sm'
                             : 'bg-gray-100 text-gray-400'
                           }`}
@@ -306,7 +306,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ doctor, onClose, onSuccess 
                     <span className="text-sm font-medium">Loading slots...</span>
                   </div>
                 ) : availableSlotsFiltered.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
                     {availableSlotsFiltered.map((slot) => (
                       <button
                         key={slot}

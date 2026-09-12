@@ -175,7 +175,7 @@ const MyAppointments: React.FC = () => {
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Appointments History</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900">Appointments</h1>
             <p className="text-gray-500 mt-1">Manage your upcoming and past medical consultations.</p>
           </div>
           <button

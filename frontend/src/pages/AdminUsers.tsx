@@ -145,7 +145,7 @@ const AdminUsers: React.FC = () => {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
             {['ALL', 'PATIENT', 'DOCTOR', 'ADMIN'].map((roleType) => (
               <button
                 key={roleType}

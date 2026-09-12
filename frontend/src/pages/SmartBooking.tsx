@@ -132,13 +132,13 @@ export default function SmartBooking() {
           <CheckCircle2 className="w-8 h-8 shrink-0 text-white" />
           <div className="flex-1">
             <p className="font-bold text-base">Appointment Booked Successfully!</p>
-            <p className="text-xs text-green-100 mt-0.5">Your slot is confirmed. View details in Appointments History.</p>
+            <p className="text-xs text-green-100 mt-0.5">Your slot is confirmed. View details in Appointments.</p>
           </div>
           <button
             onClick={() => navigate('/patient/appointments')}
             className="px-3 py-1.5 bg-white text-green-800 rounded-lg text-xs font-bold hover:bg-green-50 transition-colors shrink-0 cursor-pointer"
           >
-            History
+            Appointments
           </button>
         </div>
       )}
