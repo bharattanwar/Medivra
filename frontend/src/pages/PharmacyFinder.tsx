@@ -8,6 +8,7 @@ import {
 import api from '../services/api';
 import { aiService } from '../services/ai';
 import { openRazorpayCheckout } from '../services/razorpay';
+import { ModeSelector } from '../components/ModeSelector';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,11 +54,31 @@ interface PharmacyAllocation {
   subtotal: number;
 }
 
+interface PharmacyComparisonOption {
+  type: 'FASTEST' | 'CHEAPEST' | 'BEST_VALUE';
+  pharmacyId: string;
+  pharmacyName: string;
+  pharmacyAddress: string;
+  distanceKm: number;
+  estimatedMinutes: number;
+  medicineTotal: number;
+  deliveryFee: number;
+  totalPayable: number;
+  savingsAmount: number;
+  badgeLabel: string;
+  items: AllocatedItem[];
+  selected: boolean;
+}
+
 interface MatchResult {
   allSatisfied: boolean;
   allocations: PharmacyAllocation[];
   totalAmount: number;
+  deliveryFee?: number;
+  grandTotal?: number;
   unsatisfiedMedicineIds: string[];
+  comparisonOptions?: PharmacyComparisonOption[];
+  selectedOptionType?: string;
 }
 
 interface MedivraPrescription {
@@ -153,6 +174,27 @@ const PharmacyFinder: React.FC = () => {
   const [matchLocation, setMatchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeMapPharmacyId, setActiveMapPharmacyId] = useState<string | null>(null);
   const [matchGeoLoading, setMatchGeoLoading] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'CHEAPEST' | 'BEST_VALUE'>('FASTEST');
+
+  // Comparison Option Selection Helpers
+  const activeOption = matchResult?.comparisonOptions?.find(o => o.type === selectedMode) || matchResult?.comparisonOptions?.[0];
+
+  const displayedAllocations: PharmacyAllocation[] = (activeOption && activeOption.items && activeOption.items.length > 0 && activeOption.pharmacyId)
+    ? [{
+        pharmacyId: activeOption.pharmacyId,
+        pharmacyName: activeOption.pharmacyName,
+        pharmacyAddress: activeOption.pharmacyAddress,
+        distanceKm: activeOption.distanceKm,
+        score: 100,
+        items: activeOption.items,
+        subtotal: activeOption.medicineTotal
+      }]
+    : (matchResult?.allocations || []);
+
+  const displayedMedicineSubtotal = activeOption ? activeOption.medicineTotal : (matchResult?.totalAmount || 0);
+  const displayedDeliveryFee = activeOption ? activeOption.deliveryFee : (matchResult?.deliveryFee || 25);
+  const displayedTotalPayable = activeOption ? activeOption.totalPayable : (matchResult?.grandTotal ?? (Number(displayedMedicineSubtotal) + Number(displayedDeliveryFee)));
+  const displayedSavings = activeOption?.savingsAmount || 0;
 
   // Checkout State
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -481,6 +523,7 @@ const PharmacyFinder: React.FC = () => {
 
       if (matchRes.data.success) {
         setMatchResult(matchRes.data.data);
+        setSelectedMode('FASTEST');
       }
     } catch (err: any) {
       setMatchError(err.response?.data?.message || 'Matching algorithm failed. Try again.');
@@ -504,7 +547,10 @@ const PharmacyFinder: React.FC = () => {
         radiusKm: 50,
         medicines: basket.map(b => ({ medicineId: b.medicineId, quantity: b.quantity })),
       });
-      if (res.data.success) setMatchResult(res.data.data);
+      if (res.data.success) {
+        setMatchResult(res.data.data);
+        setSelectedMode('FASTEST');
+      }
     } catch (err: any) {
       setMatchError(err.response?.data?.message || 'Match failed. Please try again.');
     } finally {
@@ -518,7 +564,7 @@ const PharmacyFinder: React.FC = () => {
     const loc = matchLocation || userLocation;
     if (!loc) return null;
     const checkoutItems: any[] = [];
-    matchResult.allocations.forEach(alloc => {
+    displayedAllocations.forEach(alloc => {
       alloc.items.forEach(item => {
         checkoutItems.push({
           pharmacyId: alloc.pharmacyId,
@@ -1317,12 +1363,17 @@ const PharmacyFinder: React.FC = () => {
                     </div>
                     <div className="ml-auto text-right">
                       <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Subtotal</p>
-                      <p className="text-xl font-black text-slate-900">₹{Number(matchResult.totalAmount).toFixed(2)}</p>
+                      <p className="text-xl font-black text-slate-900">₹{Number(displayedTotalPayable).toFixed(2)}</p>
                     </div>
                   </div>
 
+                  {/* ── Mode Selector (Fastest / Cheapest / Best Value) ── */}
+                  {matchResult.comparisonOptions && matchResult.comparisonOptions.length > 1 && (
+                    <ModeSelector selected={selectedMode} onSelect={setSelectedMode} />
+                  )}
+
                   {/* Check for No Match / No Allocations */}
-                  {matchResult.allocations.length === 0 || Number(matchResult.totalAmount) === 0 ? (
+                  {matchResult.allocations.length === 0 || Number(displayedTotalPayable) === 0 ? (
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center space-y-4 animate-fade-in shadow-sm">
                       <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
                         <AlertCircle className="h-7 w-7" />
@@ -1343,7 +1394,7 @@ const PharmacyFinder: React.FC = () => {
                   ) : (
                     <>
                       {/* Allocation Cards */}
-                      {matchResult.allocations.map((alloc, idx) => (
+                      {displayedAllocations.map((alloc, idx) => (
                         <div key={alloc.pharmacyId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                           {/* Card Header */}
                           <div className="bg-gradient-to-r from-blue-50 to-sky-50 px-5 py-4 border-b border-blue-100">
@@ -1550,24 +1601,31 @@ const PharmacyFinder: React.FC = () => {
                                 </p>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={handlePaymentConfirm}
-                                disabled={!paymentMethod || checkoutLoading}
-                                className={`w-full py-3 font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 ${
-                                  paymentMethod === 'cod'
-                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
-                                    : 'bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-800 text-white'
-                                }`}
-                              >
-                                {paymentMethod === 'cod' ? (
-                                  <><Truck className="h-4 w-4" /> Place Order — Pay on Delivery</>
-                                ) : paymentMethod === 'online' ? (
-                                  <><Smartphone className="h-4 w-4" /> Pay ₹{Number(matchResult.totalAmount).toFixed(2)} Online</>
-                                ) : (
-                                  'Select a payment method above'
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={handlePaymentConfirm}
+                                  disabled={!paymentMethod || checkoutLoading}
+                                  className={`w-full py-3 font-bold text-sm rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 ${
+                                    paymentMethod === 'cod'
+                                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
+                                      : 'bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-800 text-white'
+                                  }`}
+                                >
+                                  {paymentMethod === 'cod' ? (
+                                    <><Truck className="h-4 w-4" /> Place Order — Pay on Delivery</>
+                                  ) : paymentMethod === 'online' ? (
+                                    <><Smartphone className="h-4 w-4" /> Pay ₹{Number(displayedTotalPayable).toFixed(2)} Online</>
+                                  ) : (
+                                    'Select a payment method above'
+                                  )}
+                                </button>
+                                {displayedSavings > 0 && (
+                                  <p className="text-sm font-bold text-green-600 mt-2 text-center bg-green-50 py-1.5 px-3 rounded-lg border border-green-200">
+                                    🎉 You save ₹{Number(displayedSavings).toFixed(2)} with this option!
+                                  </p>
                                 )}
-                              </button>
+                              </>
                             )}
                           </>
                         )}

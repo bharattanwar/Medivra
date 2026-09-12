@@ -16,6 +16,8 @@ public class PharmacyMatchRequest {
 
     private Double radiusKm = 5.0;
 
+    private String preferredMode = "FASTEST"; // FASTEST, CHEAPEST, BEST_VALUE
+
     @NotEmpty(message = "At least one medicine is required")
     @Valid
     private List<MedicineItem> medicines;
@@ -42,6 +44,9 @@ public class PharmacyMatchRequest {
 
     public Double getRadiusKm() { return radiusKm; }
     public void setRadiusKm(Double radiusKm) { this.radiusKm = radiusKm; }
+
+    public String getPreferredMode() { return preferredMode; }
+    public void setPreferredMode(String preferredMode) { this.preferredMode = preferredMode; }
 
     public List<MedicineItem> getMedicines() { return medicines; }
     public void setMedicines(List<MedicineItem> medicines) { this.medicines = medicines; }
