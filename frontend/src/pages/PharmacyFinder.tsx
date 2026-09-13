@@ -721,21 +721,21 @@ const PharmacyFinder: React.FC = () => {
 
   // Render helpers
   const tabClass = (t: Tab) =>
-    `flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+    `flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 rounded-xl font-semibold text-[11px] sm:text-sm transition-all w-full leading-tight min-w-0 ${
       activeTab === t
         ? 'bg-white text-blue-700 shadow-md'
         : 'text-white/70 hover:text-white hover:bg-white/10'
     }`;
 
   const modeBtnClass = (m: MatchMode) =>
-    `flex-1 py-3 text-sm font-bold border-b-2 transition-all flex items-center justify-center gap-2 ${
+    `w-full py-2.5 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center justify-center gap-1.5 sm:gap-2 leading-tight min-w-0 ${
       matchMode === m
         ? 'border-indigo-600 text-indigo-600 bg-indigo-50/10'
         : 'border-transparent text-slate-500 hover:text-slate-700'
     }`;
 
   const sourceBtnClass = (s: PrescriptionSource) =>
-    `flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+    `w-full py-2 px-2 sm:px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center text-center leading-tight min-w-0 ${
       prescriptionSource === s
         ? 'bg-indigo-600 text-white shadow'
         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -744,38 +744,41 @@ const PharmacyFinder: React.FC = () => {
   return (
     <div className="min-h-full bg-slate-50">
       {/* Header */}
-      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-1.5 rounded-full text-sm font-semibold mb-4">
-            <Pill className="h-4 w-4" /> Medicine Ecosystem
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 text-center">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-3 sm:mb-4">
+            <Pill className="h-4 w-4 shrink-0" /> Medicine Ecosystem
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Order Prescription Medicines</h1>
-          <p className="text-blue-100 text-base max-w-xl mx-auto">
+          <h1 className="text-2xl sm:text-4xl font-bold mb-2">Order Prescription Medicines</h1>
+          <p className="text-blue-100 text-xs sm:text-base max-w-xl mx-auto px-2">
             Upload your doctor's prescription or search for medicines directly. We'll find and optimize fulfillment routes across nearby pharmacies.
           </p>
 
           {/* Tab Toggle */}
-          <div className="mt-8 inline-flex bg-blue-800/60 backdrop-blur rounded-2xl p-1.5 gap-1">
+          <div className="mt-6 sm:mt-8 grid grid-cols-3 w-full max-w-xl mx-auto bg-blue-800/60 backdrop-blur rounded-2xl p-1.5 gap-1">
             <button
               id="tab-nearby"
               onClick={() => setActiveTab('nearby')}
               className={tabClass('nearby')}
             >
-              <Navigation className="h-4 w-4" /> Nearby Pharmacies
+              <Navigation className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>Nearby Pharmacies</span>
             </button>
             <button
               id="tab-match"
               onClick={() => setActiveTab('match')}
               className={tabClass('match')}
             >
-              <Sparkles className="h-4 w-4" /> Order Medicines
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>Order Medicines</span>
             </button>
             <button
               id="tab-tracking"
               onClick={() => navigate('/patient/orders')}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
+              className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 rounded-xl font-semibold text-[11px] sm:text-sm transition-all text-white/70 hover:text-white hover:bg-white/10 cursor-pointer w-full leading-tight min-w-0"
             >
-              <Truck className="h-4 w-4" /> Order Tracking
+              <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>Order Tracking</span>
             </button>
           </div>
         </div>
@@ -993,9 +996,9 @@ const PharmacyFinder: React.FC = () => {
             <div className="lg:col-span-2 space-y-5">
               
               {/* Location configuration */}
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+                  <div className="flex-1">
                     <h3 className="font-bold text-slate-800 text-sm">Delivery Location</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Detect your current GPS location to route your order.</p>
                   </div>
@@ -1007,7 +1010,7 @@ const PharmacyFinder: React.FC = () => {
                       () => {}
                     )}
                     disabled={matchGeoLoading}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold text-xs hover:bg-blue-100/50 transition-all disabled:opacity-60 cursor-pointer shadow-sm"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold text-xs hover:bg-blue-100/50 transition-all disabled:opacity-60 cursor-pointer shadow-sm shrink-0 w-full sm:w-auto"
                   >
                     {matchGeoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
                     Detect GPS
@@ -1016,9 +1019,9 @@ const PharmacyFinder: React.FC = () => {
 
                 {/* Status indicator */}
                 {(matchLocation || userLocation) ? (
-                  <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
-                    <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-                    <span>📡 GPS location active — ready to find pharmacies</span>
+                  <div className="text-xs text-green-700 bg-green-50/50 border border-green-200 px-3 py-2 rounded-xl flex items-center gap-1.5 overflow-hidden text-ellipsis">
+                    <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse shrink-0" />
+                    <span className="truncate sm:whitespace-normal">📡 GPS location active — ready to find pharmacies</span>
                   </div>
                 ) : (
                   <p className="text-xs text-amber-600 font-medium">⚠️ GPS location required for pharmacy optimization</p>
@@ -1026,20 +1029,20 @@ const PharmacyFinder: React.FC = () => {
               </div>
 
               {/* Mode Selector */}
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex shrink-0">
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm grid grid-cols-2 w-full">
                 <button
                   type="button"
                   onClick={() => { setMatchMode('prescription'); setMatchResult(null); }}
                   className={modeBtnClass('prescription')}
                 >
-                  <FileText className="h-4 w-4" /> Order by Prescription
+                  <FileText className="h-4 w-4 shrink-0" /> <span className="truncate sm:whitespace-normal">Order by Prescription</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => { setMatchMode('manual'); setMatchResult(null); }}
                   className={modeBtnClass('manual')}
                 >
-                  <Search className="h-4 w-4" /> Manual Search
+                  <Search className="h-4 w-4 shrink-0" /> <span className="truncate sm:whitespace-normal">Manual Search</span>
                 </button>
               </div>
 
@@ -1047,7 +1050,7 @@ const PharmacyFinder: React.FC = () => {
               {matchMode === 'prescription' && (
                 <div className="space-y-4">
                   {/* Select/Upload Toggle */}
-                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl w-full">
                     <button
                       type="button"
                       onClick={() => { setPrescriptionSource('select'); setIdentifiedItems([]); setSelectedPrescId(''); }}

@@ -126,12 +126,12 @@ const PaymentHistory: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 bg-white rounded-xl border border-gray-200 p-1 w-fit">
+        <div className="flex flex-col sm:flex-row gap-2 mb-6 bg-white rounded-xl border border-gray-200 p-1 w-full sm:w-fit">
           {(['all', 'consultations', 'medicines'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize transition-all ${
+              className={`px-3.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold capitalize transition-all text-center justify-center ${
                 activeTab === tab
                   ? 'bg-indigo-600 text-white shadow'
                   : 'text-gray-500 hover:text-gray-800'

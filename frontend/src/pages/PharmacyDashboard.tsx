@@ -463,26 +463,26 @@ const PharmacyDashboard: React.FC = () => {
           </div>
 
           {/* Sub Navigation Tabs */}
-          <div className="mt-8 flex gap-2 p-1.5 bg-orange-700/30 backdrop-blur rounded-2xl w-max">
+          <div className="mt-8 flex flex-col sm:flex-row gap-2 p-1.5 bg-orange-700/30 backdrop-blur rounded-2xl w-full sm:w-max max-w-md">
             <button
               onClick={() => handleTabSwitch('inventory')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer w-full sm:w-auto ${
                 activeTab === 'inventory'
                   ? 'bg-white text-orange-700 shadow-md'
                   : 'text-orange-100 hover:text-white'
               }`}
             >
-              <Package className="h-4 w-4" /> Inventory Management
+              <Package className="h-4 w-4 shrink-0" /> Inventory Management
             </button>
             <button
               onClick={() => handleTabSwitch('orders')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer w-full sm:w-auto ${
                 activeTab === 'orders'
                   ? 'bg-white text-orange-700 shadow-md'
                   : 'text-orange-100 hover:text-white'
               }`}
             >
-              <ShoppingCart className="h-4 w-4" /> Order Requests
+              <ShoppingCart className="h-4 w-4 shrink-0" /> Order Requests
               {orders.filter(o => o.status === 'PENDING').length > 0 && (
                 <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
                   {orders.filter(o => o.status === 'PENDING').length}
