@@ -172,7 +172,7 @@ public class PharmacyMatchService {
             List<PharmacyComparisonOption> options = new ArrayList<>();
 
             // Option 1: FASTEST
-            options.add(new PharmacyComparisonOption(
+            PharmacyComparisonOption optFastest = new PharmacyComparisonOption(
                     "FASTEST",
                     fastestCand.pharmacy().getId(),
                     fastestCand.pharmacy().getName(),
@@ -186,11 +186,17 @@ public class PharmacyMatchService {
                     "⚡ Fastest Delivery",
                     fastestCand.items(),
                     "FASTEST".equals(preferredMode)
-            ));
+            );
+            PharmacyAllocation allocFastest = new PharmacyAllocation(
+                    fastestCand.pharmacy().getId(), fastestCand.pharmacy().getName(),
+                    fastestCand.pharmacy().getAddress(), fastestCand.distanceKm(),
+                    100.0, fastestCand.items(), fastestCand.medicineTotal());
+            optFastest.setAllocations(List.of(allocFastest));
+            options.add(optFastest);
 
             // Option 2: BEST VALUE
             BigDecimal bestValueSavings = fastestCand.totalPayable().subtract(bestValueCand.totalPayable()).max(BigDecimal.ZERO);
-            options.add(new PharmacyComparisonOption(
+            PharmacyComparisonOption optBestValue = new PharmacyComparisonOption(
                     "BEST_VALUE",
                     bestValueCand.pharmacy().getId(),
                     bestValueCand.pharmacy().getName(),
@@ -204,11 +210,17 @@ public class PharmacyMatchService {
                     bestValueSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + bestValueSavings.intValue() : "Optimal Balance",
                     bestValueCand.items(),
                     "BEST_VALUE".equals(preferredMode)
-            ));
+            );
+            PharmacyAllocation allocBestValue = new PharmacyAllocation(
+                    bestValueCand.pharmacy().getId(), bestValueCand.pharmacy().getName(),
+                    bestValueCand.pharmacy().getAddress(), bestValueCand.distanceKm(),
+                    100.0, bestValueCand.items(), bestValueCand.medicineTotal());
+            optBestValue.setAllocations(List.of(allocBestValue));
+            options.add(optBestValue);
 
             // Option 3: CHEAPEST
             BigDecimal cheapestSavings = fastestCand.totalPayable().subtract(cheapestCand.totalPayable()).max(BigDecimal.ZERO);
-            options.add(new PharmacyComparisonOption(
+            PharmacyComparisonOption optCheapest = new PharmacyComparisonOption(
                     "CHEAPEST",
                     cheapestCand.pharmacy().getId(),
                     cheapestCand.pharmacy().getName(),
@@ -222,7 +234,13 @@ public class PharmacyMatchService {
                     cheapestSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + cheapestSavings.intValue() : "Lowest Price",
                     cheapestCand.items(),
                     "CHEAPEST".equals(preferredMode)
-            ));
+            );
+            PharmacyAllocation allocCheapest = new PharmacyAllocation(
+                    cheapestCand.pharmacy().getId(), cheapestCand.pharmacy().getName(),
+                    cheapestCand.pharmacy().getAddress(), cheapestCand.distanceKm(),
+                    100.0, cheapestCand.items(), cheapestCand.medicineTotal());
+            optCheapest.setAllocations(List.of(allocCheapest));
+            options.add(optCheapest);
 
             // Select active candidate based on preferred mode
             CompleteCandidate activeCand;
@@ -256,84 +274,122 @@ public class PharmacyMatchService {
             );
         }
 
-        // ── Case B: Fallback - Partial/Greedy split across multiple pharmacies ──
-        record ScoredPharmacy(Pharmacy pharmacy, double distanceKm, double score,
-                               List<PharmacyInventory> matchingInventory) {}
+        // ── Case B: Fallback - Multi-mode split across multiple pharmacies ──
+        List<PharmacyAllocation> fastestAllocations = buildFastestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+        List<PharmacyAllocation> cheapestAllocations = buildCheapestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+        List<PharmacyAllocation> bestValueAllocations = buildBestValueAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
 
-        List<ScoredPharmacy> scored = candidates.stream()
-                .map(pharmacy -> {
-                    double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
-                    List<PharmacyInventory> inv = inventoryByPharmacy.get(pharmacy.getId());
-                    List<PharmacyInventory> matching = inv.stream()
-                            .filter(i -> needed.containsKey(i.getMedicine().getId()))
-                            .filter(i -> i.getQuantity() >= needed.get(i.getMedicine().getId()))
-                            .collect(Collectors.toList());
-                    return new ScoredPharmacy(pharmacy, dist, computeScore(matching.size(), dist), matching);
-                })
-                .sorted(Comparator.comparingDouble(ScoredPharmacy::score).reversed())
-                .collect(Collectors.toList());
+        BigDecimal medTotFastest = sumAllocationsMedicineTotal(fastestAllocations);
+        double maxDistFastest = maxAllocationsDistance(fastestAllocations);
+        BigDecimal delFeeFastest = computeDeliveryFee(maxDistFastest);
+        BigDecimal totalFastest = medTotFastest.add(delFeeFastest);
 
-        Set<UUID> remaining = new HashSet<>(needed.keySet());
-        List<PharmacyAllocation> allocations = new ArrayList<>();
-        BigDecimal grandMedicineTotal = BigDecimal.ZERO;
-        double maxDist = 0.0;
+        BigDecimal medTotCheapest = sumAllocationsMedicineTotal(cheapestAllocations);
+        double maxDistCheapest = maxAllocationsDistance(cheapestAllocations);
+        BigDecimal delFeeCheapest = computeDeliveryFee(maxDistCheapest);
+        BigDecimal totalCheapest = medTotCheapest.add(delFeeCheapest);
 
-        for (ScoredPharmacy sp : scored) {
-            if (remaining.isEmpty()) break;
+        BigDecimal medTotBestVal = sumAllocationsMedicineTotal(bestValueAllocations);
+        double maxDistBestVal = maxAllocationsDistance(bestValueAllocations);
+        BigDecimal delFeeBestVal = computeDeliveryFee(maxDistBestVal);
+        BigDecimal totalBestVal = medTotBestVal.add(delFeeBestVal);
 
-            List<PharmacyInventory> canFulfil = sp.matchingInventory().stream()
-                    .filter(i -> remaining.contains(i.getMedicine().getId()))
-                    .collect(Collectors.toList());
+        BigDecimal cheapestSavings = totalFastest.subtract(totalCheapest).max(BigDecimal.ZERO);
+        BigDecimal bestValSavings = totalFastest.subtract(totalBestVal).max(BigDecimal.ZERO);
 
-            if (canFulfil.isEmpty()) continue;
+        PharmacyComparisonOption optFastest = new PharmacyComparisonOption(
+                "FASTEST",
+                fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyId() : null,
+                fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
+                fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + fastestAllocations.size() + " pharmacies",
+                round(maxDistFastest),
+                computeEtaMinutes(maxDistFastest),
+                medTotFastest,
+                delFeeFastest,
+                totalFastest,
+                BigDecimal.ZERO,
+                "⚡ Fastest Delivery",
+                fastestAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
+                "FASTEST".equals(preferredMode)
+        );
+        optFastest.setAllocations(fastestAllocations);
 
-            Map<UUID, Integer> subsetNeeded = new HashMap<>();
-            canFulfil.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
+        PharmacyComparisonOption optBestVal = new PharmacyComparisonOption(
+                "BEST_VALUE",
+                bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyId() : null,
+                bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
+                bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + bestValueAllocations.size() + " pharmacies",
+                round(maxDistBestVal),
+                computeEtaMinutes(maxDistBestVal),
+                medTotBestVal,
+                delFeeBestVal,
+                totalBestVal,
+                bestValSavings,
+                bestValSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + bestValSavings.intValue() : "Optimal Balance",
+                bestValueAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
+                "BEST_VALUE".equals(preferredMode)
+        );
+        optBestVal.setAllocations(bestValueAllocations);
 
-            List<AllocatedItem> items = buildAllocatedItems(canFulfil, subsetNeeded);
-            BigDecimal subtotal = sumLineTotals(items);
+        PharmacyComparisonOption optCheapest = new PharmacyComparisonOption(
+                "CHEAPEST",
+                cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyId() : null,
+                cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
+                cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + cheapestAllocations.size() + " pharmacies",
+                round(maxDistCheapest),
+                computeEtaMinutes(maxDistCheapest),
+                medTotCheapest,
+                delFeeCheapest,
+                totalCheapest,
+                cheapestSavings,
+                cheapestSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + cheapestSavings.intValue() : "Lowest Price",
+                cheapestAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
+                "CHEAPEST".equals(preferredMode)
+        );
+        optCheapest.setAllocations(cheapestAllocations);
 
-            allocations.add(new PharmacyAllocation(
-                    sp.pharmacy().getId(), sp.pharmacy().getName(),
-                    sp.pharmacy().getAddress(), round(sp.distanceKm()),
-                    round(sp.score()), items, subtotal));
+        List<PharmacyComparisonOption> options = List.of(optFastest, optBestVal, optCheapest);
 
-            grandMedicineTotal = grandMedicineTotal.add(subtotal);
-            maxDist = Math.max(maxDist, sp.distanceKm());
-            canFulfil.forEach(i -> remaining.remove(i.getMedicine().getId()));
+        List<PharmacyAllocation> activeAllocations;
+        BigDecimal activeMedTotal;
+        BigDecimal activeDelFee;
+        BigDecimal activeTotalPayable;
+
+        if ("CHEAPEST".equals(preferredMode)) {
+            activeAllocations = cheapestAllocations;
+            activeMedTotal = medTotCheapest;
+            activeDelFee = delFeeCheapest;
+            activeTotalPayable = totalCheapest;
+        } else if ("BEST_VALUE".equals(preferredMode)) {
+            activeAllocations = bestValueAllocations;
+            activeMedTotal = medTotBestVal;
+            activeDelFee = delFeeBestVal;
+            activeTotalPayable = totalBestVal;
+        } else {
+            activeAllocations = fastestAllocations;
+            activeMedTotal = medTotFastest;
+            activeDelFee = delFeeFastest;
+            activeTotalPayable = totalFastest;
         }
 
-        BigDecimal deliveryFee = computeDeliveryFee(maxDist);
-        BigDecimal totalPayable = grandMedicineTotal.add(deliveryFee);
+        Set<UUID> satisfiedIds = activeAllocations.stream()
+                .flatMap(a -> a.getItems().stream())
+                .map(AllocatedItem::getMedicineId)
+                .collect(Collectors.toSet());
 
-        List<PharmacyComparisonOption> fallbackOptions = List.of(
-                new PharmacyComparisonOption(
-                        "FASTEST",
-                        allocations.isEmpty() ? null : allocations.get(0).getPharmacyId(),
-                        allocations.isEmpty() ? "Multiple Pharmacies" : allocations.get(0).getPharmacyName(),
-                        allocations.isEmpty() ? "" : allocations.get(0).getPharmacyAddress(),
-                        round(maxDist),
-                        computeEtaMinutes(maxDist),
-                        grandMedicineTotal,
-                        deliveryFee,
-                        totalPayable,
-                        BigDecimal.ZERO,
-                        "Split Order Allocation",
-                        allocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
-                        true
-                )
-        );
+        List<UUID> unsatisfiedIds = needed.keySet().stream()
+                .filter(id -> !satisfiedIds.contains(id))
+                .collect(Collectors.toList());
 
-        boolean allSatisfied = remaining.isEmpty();
         return new PharmacyMatchResult(
-                allSatisfied,
-                allocations,
-                grandMedicineTotal,
-                deliveryFee,
-                totalPayable,
-                new ArrayList<>(remaining),
-                fallbackOptions,
-                "FASTEST"
+                unsatisfiedIds.isEmpty(),
+                activeAllocations,
+                activeMedTotal,
+                activeDelFee,
+                activeTotalPayable,
+                unsatisfiedIds,
+                options,
+                preferredMode
         );
     }
 
@@ -371,6 +427,172 @@ public class PharmacyMatchService {
         return items.stream()
                 .map(AllocatedItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<PharmacyAllocation> buildFastestAllocations(
+            List<Pharmacy> candidates,
+            Map<UUID, List<PharmacyInventory>> inventoryByPharmacy,
+            Map<UUID, Integer> needed,
+            double userLat, double userLng) {
+
+        record ScoredPharmacy(Pharmacy pharmacy, double distanceKm, double score,
+                               List<PharmacyInventory> matchingInventory) {}
+
+        List<ScoredPharmacy> scored = candidates.stream()
+                .map(pharmacy -> {
+                    double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
+                    List<PharmacyInventory> inv = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
+                    List<PharmacyInventory> matching = inv.stream()
+                            .filter(i -> needed.containsKey(i.getMedicine().getId()))
+                            .filter(i -> i.getQuantity() >= needed.get(i.getMedicine().getId()))
+                            .collect(Collectors.toList());
+                    return new ScoredPharmacy(pharmacy, dist, computeScore(matching.size(), dist), matching);
+                })
+                .sorted(Comparator.comparingDouble(ScoredPharmacy::score).reversed())
+                .collect(Collectors.toList());
+
+        Set<UUID> remaining = new HashSet<>(needed.keySet());
+        List<PharmacyAllocation> allocations = new ArrayList<>();
+
+        for (ScoredPharmacy sp : scored) {
+            if (remaining.isEmpty()) break;
+
+            List<PharmacyInventory> canFulfil = sp.matchingInventory().stream()
+                    .filter(i -> remaining.contains(i.getMedicine().getId()))
+                    .collect(Collectors.toList());
+
+            if (canFulfil.isEmpty()) continue;
+
+            Map<UUID, Integer> subsetNeeded = new HashMap<>();
+            canFulfil.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
+
+            List<AllocatedItem> items = buildAllocatedItems(canFulfil, subsetNeeded);
+            BigDecimal subtotal = sumLineTotals(items);
+
+            allocations.add(new PharmacyAllocation(
+                    sp.pharmacy().getId(), sp.pharmacy().getName(),
+                    sp.pharmacy().getAddress(), round(sp.distanceKm()),
+                    round(sp.score()), items, subtotal));
+
+            canFulfil.forEach(i -> remaining.remove(i.getMedicine().getId()));
+        }
+
+        return allocations;
+    }
+
+    private List<PharmacyAllocation> buildCheapestAllocations(
+            List<Pharmacy> candidates,
+            Map<UUID, List<PharmacyInventory>> inventoryByPharmacy,
+            Map<UUID, Integer> needed,
+            double userLat, double userLng) {
+
+        Map<Pharmacy, List<PharmacyInventory>> chosenMap = new LinkedHashMap<>();
+
+        for (UUID medicineId : needed.keySet()) {
+            int qtyNeeded = needed.get(medicineId);
+            PharmacyInventory cheapestInv = null;
+            Pharmacy cheapestPharmacy = null;
+            double minDistance = Double.MAX_VALUE;
+
+            for (Pharmacy pharmacy : candidates) {
+                double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
+                List<PharmacyInventory> invList = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
+                for (PharmacyInventory inv : invList) {
+                    if (inv.getMedicine().getId().equals(medicineId) && inv.getQuantity() >= qtyNeeded) {
+                        if (cheapestInv == null || inv.getPrice().compareTo(cheapestInv.getPrice()) < 0
+                                || (inv.getPrice().compareTo(cheapestInv.getPrice()) == 0 && dist < minDistance)) {
+                            cheapestInv = inv;
+                            cheapestPharmacy = pharmacy;
+                            minDistance = dist;
+                        }
+                    }
+                }
+            }
+
+            if (cheapestPharmacy != null && cheapestInv != null) {
+                chosenMap.computeIfAbsent(cheapestPharmacy, k -> new ArrayList<>()).add(cheapestInv);
+            }
+        }
+
+        List<PharmacyAllocation> allocations = new ArrayList<>();
+        for (Map.Entry<Pharmacy, List<PharmacyInventory>> entry : chosenMap.entrySet()) {
+            Pharmacy pharmacy = entry.getKey();
+            List<PharmacyInventory> invs = entry.getValue();
+            double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
+            Map<UUID, Integer> subsetNeeded = new HashMap<>();
+            invs.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
+            List<AllocatedItem> items = buildAllocatedItems(invs, subsetNeeded);
+            BigDecimal subtotal = sumLineTotals(items);
+            allocations.add(new PharmacyAllocation(
+                    pharmacy.getId(), pharmacy.getName(), pharmacy.getAddress(),
+                    round(dist), 100.0, items, subtotal));
+        }
+
+        return allocations;
+    }
+
+    private List<PharmacyAllocation> buildBestValueAllocations(
+            List<Pharmacy> candidates,
+            Map<UUID, List<PharmacyInventory>> inventoryByPharmacy,
+            Map<UUID, Integer> needed,
+            double userLat, double userLng) {
+
+        Map<Pharmacy, List<PharmacyInventory>> chosenMap = new LinkedHashMap<>();
+
+        for (UUID medicineId : needed.keySet()) {
+            int qtyNeeded = needed.get(medicineId);
+            PharmacyInventory bestInv = null;
+            Pharmacy bestPharmacy = null;
+            double bestValScore = Double.MAX_VALUE;
+
+            for (Pharmacy pharmacy : candidates) {
+                double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
+                List<PharmacyInventory> invList = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
+                for (PharmacyInventory inv : invList) {
+                    if (inv.getMedicine().getId().equals(medicineId) && inv.getQuantity() >= qtyNeeded) {
+                        double valScore = inv.getPrice().doubleValue() * 1.0 + dist * 0.5;
+                        if (bestInv == null || valScore < bestValScore) {
+                            bestInv = inv;
+                            bestPharmacy = pharmacy;
+                            bestValScore = valScore;
+                        }
+                    }
+                }
+            }
+
+            if (bestPharmacy != null && bestInv != null) {
+                chosenMap.computeIfAbsent(bestPharmacy, k -> new ArrayList<>()).add(bestInv);
+            }
+        }
+
+        List<PharmacyAllocation> allocations = new ArrayList<>();
+        for (Map.Entry<Pharmacy, List<PharmacyInventory>> entry : chosenMap.entrySet()) {
+            Pharmacy pharmacy = entry.getKey();
+            List<PharmacyInventory> invs = entry.getValue();
+            double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
+            Map<UUID, Integer> subsetNeeded = new HashMap<>();
+            invs.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
+            List<AllocatedItem> items = buildAllocatedItems(invs, subsetNeeded);
+            BigDecimal subtotal = sumLineTotals(items);
+            allocations.add(new PharmacyAllocation(
+                    pharmacy.getId(), pharmacy.getName(), pharmacy.getAddress(),
+                    round(dist), 100.0, items, subtotal));
+        }
+
+        return allocations;
+    }
+
+    private BigDecimal sumAllocationsMedicineTotal(List<PharmacyAllocation> allocations) {
+        return allocations.stream()
+                .map(PharmacyAllocation::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private double maxAllocationsDistance(List<PharmacyAllocation> allocations) {
+        return allocations.stream()
+                .mapToDouble(PharmacyAllocation::getDistanceKm)
+                .max()
+                .orElse(0.0);
     }
 
     private double computeScore(int medicinesFound, double distanceKm) {

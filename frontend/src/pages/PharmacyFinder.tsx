@@ -67,6 +67,7 @@ interface PharmacyComparisonOption {
   savingsAmount: number;
   badgeLabel: string;
   items: AllocatedItem[];
+  allocations?: PharmacyAllocation[];
   selected: boolean;
 }
 
@@ -179,17 +180,19 @@ const PharmacyFinder: React.FC = () => {
   // Comparison Option Selection Helpers
   const activeOption = matchResult?.comparisonOptions?.find(o => o.type === selectedMode) || matchResult?.comparisonOptions?.[0];
 
-  const displayedAllocations: PharmacyAllocation[] = (activeOption && activeOption.items && activeOption.items.length > 0 && activeOption.pharmacyId)
-    ? [{
-        pharmacyId: activeOption.pharmacyId,
-        pharmacyName: activeOption.pharmacyName,
-        pharmacyAddress: activeOption.pharmacyAddress,
-        distanceKm: activeOption.distanceKm,
-        score: 100,
-        items: activeOption.items,
-        subtotal: activeOption.medicineTotal
-      }]
-    : (matchResult?.allocations || []);
+  const displayedAllocations: PharmacyAllocation[] = (activeOption && activeOption.allocations && activeOption.allocations.length > 0)
+    ? activeOption.allocations
+    : ((activeOption && activeOption.items && activeOption.items.length > 0 && activeOption.pharmacyId && activeOption.pharmacyName !== 'Multiple Pharmacies')
+        ? [{
+            pharmacyId: activeOption.pharmacyId,
+            pharmacyName: activeOption.pharmacyName,
+            pharmacyAddress: activeOption.pharmacyAddress,
+            distanceKm: activeOption.distanceKm,
+            score: 100,
+            items: activeOption.items,
+            subtotal: activeOption.medicineTotal
+          }]
+        : (matchResult?.allocations || []));
 
   const displayedMedicineSubtotal = activeOption ? activeOption.medicineTotal : (matchResult?.totalAmount || 0);
   const displayedDeliveryFee = activeOption ? activeOption.deliveryFee : (matchResult?.deliveryFee || 25);

@@ -18,6 +18,7 @@ public class PharmacyComparisonOption {
     private BigDecimal savingsAmount;
     private String badgeLabel;
     private List<AllocatedItem> items;
+    private List<PharmacyAllocation> allocations;
     private boolean selected;
 
     public PharmacyComparisonOption() {}
@@ -136,6 +137,14 @@ public class PharmacyComparisonOption {
 
     public void setItems(List<AllocatedItem> items) {
         this.items = items;
+    }
+
+    public List<PharmacyAllocation> getAllocations() {
+        return allocations;
+    }
+
+    public void setAllocations(List<PharmacyAllocation> allocations) {
+        this.allocations = allocations;
     }
 
     public boolean isSelected() {
