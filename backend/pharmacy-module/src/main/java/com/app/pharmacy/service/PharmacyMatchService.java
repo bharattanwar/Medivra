@@ -106,7 +106,7 @@ public class PharmacyMatchService {
                     pharmacyInventoryRepository.findByPharmacyId(pharmacy.getId()));
         }
 
-        // Internal evaluation record
+        // 1. Single-pharmacy complete candidates
         record CompleteCandidate(
                 Pharmacy pharmacy,
                 double distanceKm,
@@ -118,17 +118,15 @@ public class PharmacyMatchService {
         ) {}
 
         List<CompleteCandidate> completeCandidates = new ArrayList<>();
-
         for (Pharmacy pharmacy : candidates) {
             double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
-            List<PharmacyInventory> inv = inventoryByPharmacy.get(pharmacy.getId());
+            List<PharmacyInventory> inv = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
 
             List<PharmacyInventory> matching = inv.stream()
                     .filter(i -> needed.containsKey(i.getMedicine().getId()))
                     .filter(i -> i.getQuantity() >= needed.get(i.getMedicine().getId()))
                     .collect(Collectors.toList());
 
-            // Check if this pharmacy has the COMPLETE basket
             if (matching.size() == needed.size()) {
                 List<AllocatedItem> items = buildAllocatedItems(matching, needed);
                 BigDecimal medicineTotal = sumLineTotals(items);
@@ -142,231 +140,236 @@ public class PharmacyMatchService {
             }
         }
 
-        // ── Case A: We found complete basket fulfillment ──────────────────────
+        // 2. Multi-pharmacy allocations
+        List<PharmacyAllocation> fastestAllocations = buildFastestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+        List<PharmacyAllocation> cheapestAllocations = buildCheapestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+        List<PharmacyAllocation> bestValueAllocations = buildBestValueAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+
+        // ── Build FASTEST Option ──
+        PharmacyComparisonOption optFastest;
+        List<PharmacyAllocation> allocsFastest;
+        BigDecimal medTotFastest;
+        BigDecimal delFeeFastest;
+        BigDecimal totalFastest;
+        int etaFastest;
+
         if (!completeCandidates.isEmpty()) {
-            // 1. FASTEST candidate (min distance / ETA)
             CompleteCandidate fastestCand = completeCandidates.stream()
                     .min(Comparator.comparingDouble(CompleteCandidate::distanceKm))
                     .orElse(completeCandidates.get(0));
 
-            // 2. CHEAPEST candidate (min total payable amount = medicine + delivery)
-            CompleteCandidate cheapestCand = completeCandidates.stream()
-                    .min(Comparator.comparing(CompleteCandidate::totalPayable))
-                    .orElse(completeCandidates.get(0));
+            allocsFastest = List.of(new PharmacyAllocation(
+                    fastestCand.pharmacy().getId(), fastestCand.pharmacy().getName(),
+                    fastestCand.pharmacy().getAddress(), fastestCand.distanceKm(),
+                    100.0, fastestCand.items(), fastestCand.medicineTotal()));
+            medTotFastest = fastestCand.medicineTotal();
+            delFeeFastest = fastestCand.deliveryFee();
+            totalFastest = fastestCand.totalPayable();
+            etaFastest = fastestCand.etaMinutes();
 
-            // 3. BEST VALUE candidate (optimizes price savings vs additional wait time)
-            CompleteCandidate bestValueCand = completeCandidates.stream()
-                    .max(Comparator.comparingDouble(c -> {
-                        double savings = fastestCand.totalPayable().subtract(c.totalPayable()).max(BigDecimal.ZERO).doubleValue();
-                        double extraMinutes = Math.max(0, c.etaMinutes() - fastestCand.etaMinutes());
-                        return (savings * 1.5) - (extraMinutes * 1.0);
-                    }))
-                    .orElse(cheapestCand);
-
-            // If bestValue savings is 0 or negative compared to fastest, fallback to fastest
-            if (fastestCand.totalPayable().compareTo(bestValueCand.totalPayable()) <= 0) {
-                bestValueCand = fastestCand;
-            }
-
-            // Build comparison options
-            List<PharmacyComparisonOption> options = new ArrayList<>();
-
-            // Option 1: FASTEST
-            PharmacyComparisonOption optFastest = new PharmacyComparisonOption(
+            optFastest = new PharmacyComparisonOption(
                     "FASTEST",
                     fastestCand.pharmacy().getId(),
                     fastestCand.pharmacy().getName(),
                     fastestCand.pharmacy().getAddress(),
                     fastestCand.distanceKm(),
                     fastestCand.etaMinutes(),
-                    fastestCand.medicineTotal(),
-                    fastestCand.deliveryFee(),
-                    fastestCand.totalPayable(),
+                    medTotFastest,
+                    delFeeFastest,
+                    totalFastest,
                     BigDecimal.ZERO,
                     "⚡ Fastest Delivery",
                     fastestCand.items(),
                     "FASTEST".equals(preferredMode)
             );
-            PharmacyAllocation allocFastest = new PharmacyAllocation(
-                    fastestCand.pharmacy().getId(), fastestCand.pharmacy().getName(),
-                    fastestCand.pharmacy().getAddress(), fastestCand.distanceKm(),
-                    100.0, fastestCand.items(), fastestCand.medicineTotal());
-            optFastest.setAllocations(List.of(allocFastest));
-            options.add(optFastest);
+        } else {
+            allocsFastest = fastestAllocations;
+            medTotFastest = sumAllocationsMedicineTotal(fastestAllocations);
+            double maxDist = maxAllocationsDistance(fastestAllocations);
+            delFeeFastest = computeDeliveryFee(maxDist);
+            totalFastest = medTotFastest.add(delFeeFastest);
+            etaFastest = computeEtaMinutes(maxDist);
 
-            // Option 2: BEST VALUE
-            BigDecimal bestValueSavings = fastestCand.totalPayable().subtract(bestValueCand.totalPayable()).max(BigDecimal.ZERO);
-            PharmacyComparisonOption optBestValue = new PharmacyComparisonOption(
-                    "BEST_VALUE",
-                    bestValueCand.pharmacy().getId(),
-                    bestValueCand.pharmacy().getName(),
-                    bestValueCand.pharmacy().getAddress(),
-                    bestValueCand.distanceKm(),
-                    bestValueCand.etaMinutes(),
-                    bestValueCand.medicineTotal(),
-                    bestValueCand.deliveryFee(),
-                    bestValueCand.totalPayable(),
-                    bestValueSavings,
-                    bestValueSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + bestValueSavings.intValue() : "Optimal Balance",
-                    bestValueCand.items(),
-                    "BEST_VALUE".equals(preferredMode)
-            );
-            PharmacyAllocation allocBestValue = new PharmacyAllocation(
-                    bestValueCand.pharmacy().getId(), bestValueCand.pharmacy().getName(),
-                    bestValueCand.pharmacy().getAddress(), bestValueCand.distanceKm(),
-                    100.0, bestValueCand.items(), bestValueCand.medicineTotal());
-            optBestValue.setAllocations(List.of(allocBestValue));
-            options.add(optBestValue);
-
-            // Option 3: CHEAPEST
-            BigDecimal cheapestSavings = fastestCand.totalPayable().subtract(cheapestCand.totalPayable()).max(BigDecimal.ZERO);
-            PharmacyComparisonOption optCheapest = new PharmacyComparisonOption(
-                    "CHEAPEST",
-                    cheapestCand.pharmacy().getId(),
-                    cheapestCand.pharmacy().getName(),
-                    cheapestCand.pharmacy().getAddress(),
-                    cheapestCand.distanceKm(),
-                    cheapestCand.etaMinutes(),
-                    cheapestCand.medicineTotal(),
-                    cheapestCand.deliveryFee(),
-                    cheapestCand.totalPayable(),
-                    cheapestSavings,
-                    cheapestSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + cheapestSavings.intValue() : "Lowest Price",
-                    cheapestCand.items(),
-                    "CHEAPEST".equals(preferredMode)
-            );
-            PharmacyAllocation allocCheapest = new PharmacyAllocation(
-                    cheapestCand.pharmacy().getId(), cheapestCand.pharmacy().getName(),
-                    cheapestCand.pharmacy().getAddress(), cheapestCand.distanceKm(),
-                    100.0, cheapestCand.items(), cheapestCand.medicineTotal());
-            optCheapest.setAllocations(List.of(allocCheapest));
-            options.add(optCheapest);
-
-            // Select active candidate based on preferred mode
-            CompleteCandidate activeCand;
-            if ("CHEAPEST".equals(preferredMode)) {
-                activeCand = cheapestCand;
-            } else if ("BEST_VALUE".equals(preferredMode)) {
-                activeCand = bestValueCand;
-            } else {
-                activeCand = fastestCand;
-            }
-
-            PharmacyAllocation allocation = new PharmacyAllocation(
-                    activeCand.pharmacy().getId(),
-                    activeCand.pharmacy().getName(),
-                    activeCand.pharmacy().getAddress(),
-                    activeCand.distanceKm(),
-                    round(computeScore(needed.size(), activeCand.distanceKm())),
-                    activeCand.items(),
-                    activeCand.medicineTotal()
-            );
-
-            return new PharmacyMatchResult(
-                    true,
-                    List.of(allocation),
-                    activeCand.medicineTotal(),
-                    activeCand.deliveryFee(),
-                    activeCand.totalPayable(),
-                    List.of(),
-                    options,
-                    preferredMode
+            optFastest = new PharmacyComparisonOption(
+                    "FASTEST",
+                    fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyId() : null,
+                    fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
+                    fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + fastestAllocations.size() + " pharmacies",
+                    round(maxDist),
+                    etaFastest,
+                    medTotFastest,
+                    delFeeFastest,
+                    totalFastest,
+                    BigDecimal.ZERO,
+                    "⚡ Fastest Delivery",
+                    fastestAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
+                    "FASTEST".equals(preferredMode)
             );
         }
+        optFastest.setAllocations(allocsFastest);
 
-        // ── Case B: Fallback - Multi-mode split across multiple pharmacies ──
-        List<PharmacyAllocation> fastestAllocations = buildFastestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
-        List<PharmacyAllocation> cheapestAllocations = buildCheapestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
-        List<PharmacyAllocation> bestValueAllocations = buildBestValueAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+        // ── Build CHEAPEST Option ──
+        PharmacyComparisonOption optCheapest;
+        List<PharmacyAllocation> allocsCheapest;
+        BigDecimal medTotCheapest;
+        BigDecimal delFeeCheapest;
+        BigDecimal totalCheapest;
+        int etaCheapest;
 
-        BigDecimal medTotFastest = sumAllocationsMedicineTotal(fastestAllocations);
-        double maxDistFastest = maxAllocationsDistance(fastestAllocations);
-        BigDecimal delFeeFastest = computeDeliveryFee(maxDistFastest);
-        BigDecimal totalFastest = medTotFastest.add(delFeeFastest);
+        BigDecimal splitMedTot = sumAllocationsMedicineTotal(cheapestAllocations);
+        double splitMaxDist = maxAllocationsDistance(cheapestAllocations);
+        BigDecimal splitDelFee = computeDeliveryFee(splitMaxDist);
+        BigDecimal splitTotal = splitMedTot.add(splitDelFee);
 
-        BigDecimal medTotCheapest = sumAllocationsMedicineTotal(cheapestAllocations);
-        double maxDistCheapest = maxAllocationsDistance(cheapestAllocations);
-        BigDecimal delFeeCheapest = computeDeliveryFee(maxDistCheapest);
-        BigDecimal totalCheapest = medTotCheapest.add(delFeeCheapest);
+        CompleteCandidate cheapestSingleCand = completeCandidates.stream()
+                .min(Comparator.comparing(CompleteCandidate::totalPayable))
+                .orElse(null);
 
-        BigDecimal medTotBestVal = sumAllocationsMedicineTotal(bestValueAllocations);
-        double maxDistBestVal = maxAllocationsDistance(bestValueAllocations);
-        BigDecimal delFeeBestVal = computeDeliveryFee(maxDistBestVal);
-        BigDecimal totalBestVal = medTotBestVal.add(delFeeBestVal);
+        if (cheapestSingleCand != null && cheapestSingleCand.totalPayable().compareTo(splitTotal) <= 0) {
+            allocsCheapest = List.of(new PharmacyAllocation(
+                    cheapestSingleCand.pharmacy().getId(), cheapestSingleCand.pharmacy().getName(),
+                    cheapestSingleCand.pharmacy().getAddress(), cheapestSingleCand.distanceKm(),
+                    100.0, cheapestSingleCand.items(), cheapestSingleCand.medicineTotal()));
+            medTotCheapest = cheapestSingleCand.medicineTotal();
+            delFeeCheapest = cheapestSingleCand.deliveryFee();
+            totalCheapest = cheapestSingleCand.totalPayable();
+            etaCheapest = cheapestSingleCand.etaMinutes();
 
-        BigDecimal cheapestSavings = totalFastest.subtract(totalCheapest).max(BigDecimal.ZERO);
-        BigDecimal bestValSavings = totalFastest.subtract(totalBestVal).max(BigDecimal.ZERO);
+            BigDecimal savings = totalFastest.subtract(totalCheapest).max(BigDecimal.ZERO);
+            optCheapest = new PharmacyComparisonOption(
+                    "CHEAPEST",
+                    cheapestSingleCand.pharmacy().getId(),
+                    cheapestSingleCand.pharmacy().getName(),
+                    cheapestSingleCand.pharmacy().getAddress(),
+                    cheapestSingleCand.distanceKm(),
+                    cheapestSingleCand.etaMinutes(),
+                    medTotCheapest,
+                    delFeeCheapest,
+                    totalCheapest,
+                    savings,
+                    savings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + savings.intValue() : "Lowest Price",
+                    cheapestSingleCand.items(),
+                    "CHEAPEST".equals(preferredMode)
+            );
+        } else {
+            allocsCheapest = cheapestAllocations;
+            medTotCheapest = splitMedTot;
+            delFeeCheapest = splitDelFee;
+            totalCheapest = splitTotal;
+            etaCheapest = computeEtaMinutes(splitMaxDist);
 
-        PharmacyComparisonOption optFastest = new PharmacyComparisonOption(
-                "FASTEST",
-                fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyId() : null,
-                fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
-                fastestAllocations.size() == 1 ? fastestAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + fastestAllocations.size() + " pharmacies",
-                round(maxDistFastest),
-                computeEtaMinutes(maxDistFastest),
-                medTotFastest,
-                delFeeFastest,
-                totalFastest,
-                BigDecimal.ZERO,
-                "⚡ Fastest Delivery",
-                fastestAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
-                "FASTEST".equals(preferredMode)
-        );
-        optFastest.setAllocations(fastestAllocations);
+            BigDecimal savings = totalFastest.subtract(totalCheapest).max(BigDecimal.ZERO);
+            optCheapest = new PharmacyComparisonOption(
+                    "CHEAPEST",
+                    cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyId() : null,
+                    cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
+                    cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + cheapestAllocations.size() + " pharmacies",
+                    round(splitMaxDist),
+                    etaCheapest,
+                    medTotCheapest,
+                    delFeeCheapest,
+                    totalCheapest,
+                    savings,
+                    savings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + savings.intValue() : "Lowest Price",
+                    cheapestAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
+                    "CHEAPEST".equals(preferredMode)
+            );
+        }
+        optCheapest.setAllocations(allocsCheapest);
 
-        PharmacyComparisonOption optBestVal = new PharmacyComparisonOption(
-                "BEST_VALUE",
-                bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyId() : null,
-                bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
-                bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + bestValueAllocations.size() + " pharmacies",
-                round(maxDistBestVal),
-                computeEtaMinutes(maxDistBestVal),
-                medTotBestVal,
-                delFeeBestVal,
-                totalBestVal,
-                bestValSavings,
-                bestValSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + bestValSavings.intValue() : "Optimal Balance",
-                bestValueAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
-                "BEST_VALUE".equals(preferredMode)
-        );
-        optBestVal.setAllocations(bestValueAllocations);
+        // ── Build BEST VALUE Option ──
+        PharmacyComparisonOption optBestValue;
+        List<PharmacyAllocation> allocsBestValue;
+        BigDecimal medTotBestVal;
+        BigDecimal delFeeBestVal;
+        BigDecimal totalBestVal;
+        int etaBestVal;
 
-        PharmacyComparisonOption optCheapest = new PharmacyComparisonOption(
-                "CHEAPEST",
-                cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyId() : null,
-                cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
-                cheapestAllocations.size() == 1 ? cheapestAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + cheapestAllocations.size() + " pharmacies",
-                round(maxDistCheapest),
-                computeEtaMinutes(maxDistCheapest),
-                medTotCheapest,
-                delFeeCheapest,
-                totalCheapest,
-                cheapestSavings,
-                cheapestSavings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + cheapestSavings.intValue() : "Lowest Price",
-                cheapestAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
-                "CHEAPEST".equals(preferredMode)
-        );
-        optCheapest.setAllocations(cheapestAllocations);
+        BigDecimal splitMedTotBV = sumAllocationsMedicineTotal(bestValueAllocations);
+        double splitMaxDistBV = maxAllocationsDistance(bestValueAllocations);
+        BigDecimal splitDelFeeBV = computeDeliveryFee(splitMaxDistBV);
+        BigDecimal splitTotalBV = splitMedTotBV.add(splitDelFeeBV);
 
-        List<PharmacyComparisonOption> options = List.of(optFastest, optBestVal, optCheapest);
+        CompleteCandidate bestValSingleCand = completeCandidates.stream()
+                .max(Comparator.comparingDouble(c -> {
+                    double savings = totalFastest.subtract(c.totalPayable()).max(BigDecimal.ZERO).doubleValue();
+                    double extraMinutes = Math.max(0, c.etaMinutes() - etaFastest);
+                    return (savings * 1.5) - (extraMinutes * 1.0);
+                }))
+                .orElse(null);
 
+        if (bestValSingleCand != null && bestValSingleCand.totalPayable().compareTo(splitTotalBV) <= 0) {
+            allocsBestValue = List.of(new PharmacyAllocation(
+                    bestValSingleCand.pharmacy().getId(), bestValSingleCand.pharmacy().getName(),
+                    bestValSingleCand.pharmacy().getAddress(), bestValSingleCand.distanceKm(),
+                    100.0, bestValSingleCand.items(), bestValSingleCand.medicineTotal()));
+            medTotBestVal = bestValSingleCand.medicineTotal();
+            delFeeBestVal = bestValSingleCand.deliveryFee();
+            totalBestVal = bestValSingleCand.totalPayable();
+            etaBestVal = bestValSingleCand.etaMinutes();
+
+            BigDecimal savings = totalFastest.subtract(totalBestVal).max(BigDecimal.ZERO);
+            optBestValue = new PharmacyComparisonOption(
+                    "BEST_VALUE",
+                    bestValSingleCand.pharmacy().getId(),
+                    bestValSingleCand.pharmacy().getName(),
+                    bestValSingleCand.pharmacy().getAddress(),
+                    bestValSingleCand.distanceKm(),
+                    bestValSingleCand.etaMinutes(),
+                    medTotBestVal,
+                    delFeeBestVal,
+                    totalBestVal,
+                    savings,
+                    savings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + savings.intValue() : "Optimal Balance",
+                    bestValSingleCand.items(),
+                    "BEST_VALUE".equals(preferredMode)
+            );
+        } else {
+            allocsBestValue = bestValueAllocations;
+            medTotBestVal = splitMedTotBV;
+            delFeeBestVal = splitDelFeeBV;
+            totalBestVal = splitTotalBV;
+            etaBestVal = computeEtaMinutes(splitMaxDistBV);
+
+            BigDecimal savings = totalFastest.subtract(totalBestVal).max(BigDecimal.ZERO);
+            optBestValue = new PharmacyComparisonOption(
+                    "BEST_VALUE",
+                    bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyId() : null,
+                    bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyName() : "Multiple Pharmacies",
+                    bestValueAllocations.size() == 1 ? bestValueAllocations.get(0).getPharmacyAddress() : "Split fulfillment across " + bestValueAllocations.size() + " pharmacies",
+                    round(splitMaxDistBV),
+                    etaBestVal,
+                    medTotBestVal,
+                    delFeeBestVal,
+                    totalBestVal,
+                    savings,
+                    savings.compareTo(BigDecimal.ZERO) > 0 ? "Save ₹" + savings.intValue() : "Optimal Balance",
+                    bestValueAllocations.stream().flatMap(a -> a.getItems().stream()).collect(Collectors.toList()),
+                    "BEST_VALUE".equals(preferredMode)
+            );
+        }
+        optBestValue.setAllocations(allocsBestValue);
+
+        List<PharmacyComparisonOption> options = List.of(optFastest, optBestValue, optCheapest);
+
+        // Select active mode response payload
         List<PharmacyAllocation> activeAllocations;
         BigDecimal activeMedTotal;
         BigDecimal activeDelFee;
         BigDecimal activeTotalPayable;
 
         if ("CHEAPEST".equals(preferredMode)) {
-            activeAllocations = cheapestAllocations;
+            activeAllocations = allocsCheapest;
             activeMedTotal = medTotCheapest;
             activeDelFee = delFeeCheapest;
             activeTotalPayable = totalCheapest;
         } else if ("BEST_VALUE".equals(preferredMode)) {
-            activeAllocations = bestValueAllocations;
+            activeAllocations = allocsBestValue;
             activeMedTotal = medTotBestVal;
             activeDelFee = delFeeBestVal;
             activeTotalPayable = totalBestVal;
         } else {
-            activeAllocations = fastestAllocations;
+            activeAllocations = allocsFastest;
             activeMedTotal = medTotFastest;
             activeDelFee = delFeeFastest;
             activeTotalPayable = totalFastest;
