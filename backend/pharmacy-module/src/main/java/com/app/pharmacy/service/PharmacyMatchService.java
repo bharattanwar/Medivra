@@ -8,6 +8,7 @@ import com.app.pharmacy.dto.PharmacyMatchRequest;
 import com.app.pharmacy.dto.PharmacyMatchResult;
 import com.app.pharmacy.entity.Pharmacy;
 import com.app.pharmacy.entity.PharmacyInventory;
+import com.app.pharmacy.repository.MedicineRepository;
 import com.app.pharmacy.repository.PharmacyInventoryRepository;
 import com.app.pharmacy.repository.PharmacyRepository;
 import org.springframework.stereotype.Service;
@@ -33,11 +34,14 @@ public class PharmacyMatchService {
 
     private final PharmacyRepository pharmacyRepository;
     private final PharmacyInventoryRepository pharmacyInventoryRepository;
+    private final MedicineRepository medicineRepository;
 
     public PharmacyMatchService(PharmacyRepository pharmacyRepository,
-                                PharmacyInventoryRepository pharmacyInventoryRepository) {
+                                PharmacyInventoryRepository pharmacyInventoryRepository,
+                                MedicineRepository medicineRepository) {
         this.pharmacyRepository = pharmacyRepository;
         this.pharmacyInventoryRepository = pharmacyInventoryRepository;
+        this.medicineRepository = medicineRepository;
     }
 
     // ── Phase 1: Nearby pharmacy list ────────────────────────────────────────
@@ -86,10 +90,19 @@ public class PharmacyMatchService {
         double radiusKm = request.getRadiusKm() != null ? Math.max(request.getRadiusKm(), 50.0) : 50.0;
         String preferredMode = request.getPreferredMode() != null ? request.getPreferredMode().toUpperCase() : "FASTEST";
 
-        // Build a map of requested medicineId → quantity needed
+        // Build maps of requested medicineId → quantity needed and requested name → ID
         Map<UUID, Integer> needed = new HashMap<>();
+        Map<String, UUID> nameToRequestedMedId = new HashMap<>();
+        Map<UUID, String> requestedMedNames = new HashMap<>();
+
         for (PharmacyMatchRequest.MedicineItem item : request.getMedicines()) {
             needed.put(item.getMedicineId(), item.getQuantity());
+            medicineRepository.findById(item.getMedicineId()).ifPresent(med -> {
+                if (med.getName() != null) {
+                    nameToRequestedMedId.put(med.getName().trim().toLowerCase(), med.getId());
+                    requestedMedNames.put(med.getId(), med.getName());
+                }
+            });
         }
 
         // Filter active pharmacies within search radius
@@ -122,13 +135,20 @@ public class PharmacyMatchService {
             double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
             List<PharmacyInventory> inv = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
 
-            List<PharmacyInventory> matching = inv.stream()
-                    .filter(i -> needed.containsKey(i.getMedicine().getId()))
-                    .filter(i -> i.getQuantity() >= needed.get(i.getMedicine().getId()))
-                    .collect(Collectors.toList());
+            Map<UUID, PharmacyInventory> matchedInvs = new HashMap<>();
+            for (PharmacyInventory item : inv) {
+                UUID matchedReqId = findMatchingRequestedMedicineId(item, needed, nameToRequestedMedId);
+                if (matchedReqId != null && item.getQuantity() >= needed.get(matchedReqId)) {
+                    PharmacyInventory existing = matchedInvs.get(matchedReqId);
+                    if (existing == null || item.getPrice().compareTo(existing.getPrice()) < 0) {
+                        matchedInvs.put(matchedReqId, item);
+                    }
+                }
+            }
 
-            if (matching.size() == needed.size()) {
-                List<AllocatedItem> items = buildAllocatedItems(matching, needed);
+            if (matchedInvs.size() == needed.size()) {
+                List<PharmacyInventory> matching = new ArrayList<>(matchedInvs.values());
+                List<AllocatedItem> items = buildAllocatedItems(matching, needed, nameToRequestedMedId, requestedMedNames);
                 BigDecimal medicineTotal = sumLineTotals(items);
                 BigDecimal deliveryFee = computeDeliveryFee(dist);
                 BigDecimal totalPayable = medicineTotal.add(deliveryFee);
@@ -141,9 +161,9 @@ public class PharmacyMatchService {
         }
 
         // 2. Multi-pharmacy allocations
-        List<PharmacyAllocation> fastestAllocations = buildFastestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
-        List<PharmacyAllocation> cheapestAllocations = buildCheapestAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
-        List<PharmacyAllocation> bestValueAllocations = buildBestValueAllocations(candidates, inventoryByPharmacy, needed, userLat, userLng);
+        List<PharmacyAllocation> fastestAllocations = buildFastestAllocations(candidates, inventoryByPharmacy, needed, nameToRequestedMedId, requestedMedNames, userLat, userLng);
+        List<PharmacyAllocation> cheapestAllocations = buildCheapestAllocations(candidates, inventoryByPharmacy, needed, nameToRequestedMedId, requestedMedNames, userLat, userLng);
+        List<PharmacyAllocation> bestValueAllocations = buildBestValueAllocations(candidates, inventoryByPharmacy, needed, nameToRequestedMedId, requestedMedNames, userLat, userLng);
 
         // ── Build FASTEST Option ──
         PharmacyComparisonOption optFastest;
@@ -416,13 +436,16 @@ public class PharmacyMatchService {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private List<AllocatedItem> buildAllocatedItems(List<PharmacyInventory> inventories,
-                                                     Map<UUID, Integer> neededMap) {
+                                                     Map<UUID, Integer> needed,
+                                                     Map<String, UUID> nameToRequestedMedId,
+                                                     Map<UUID, String> requestedMedNames) {
         return inventories.stream().map(inv -> {
-            UUID medId = inv.getMedicine().getId();
-            int qty = neededMap.get(medId);
+            UUID reqId = findMatchingRequestedMedicineId(inv, needed, nameToRequestedMedId);
+            if (reqId == null) reqId = inv.getMedicine().getId();
+            int qty = needed.getOrDefault(reqId, inv.getQuantity());
+            String displayName = requestedMedNames.getOrDefault(reqId, inv.getMedicine().getName());
             BigDecimal lineTotal = inv.getPrice().multiply(BigDecimal.valueOf(qty));
-            return new AllocatedItem(medId, inv.getMedicine().getName(),
-                    qty, inv.getPrice(), lineTotal);
+            return new AllocatedItem(reqId, displayName, qty, inv.getPrice(), lineTotal);
         }).collect(Collectors.toList());
     }
 
@@ -432,26 +455,63 @@ public class PharmacyMatchService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    private UUID findMatchingRequestedMedicineId(PharmacyInventory inv,
+                                                   Map<UUID, Integer> needed,
+                                                   Map<String, UUID> nameToRequestedMedId) {
+        if (inv == null || inv.getMedicine() == null) return null;
+        UUID invMedId = inv.getMedicine().getId();
+        if (needed.containsKey(invMedId)) {
+            return invMedId;
+        }
+        if (inv.getMedicine().getName() != null) {
+            String normName = inv.getMedicine().getName().trim().toLowerCase();
+            UUID mappedId = nameToRequestedMedId.get(normName);
+            if (mappedId != null && needed.containsKey(mappedId)) {
+                return mappedId;
+            }
+        }
+        return null;
+    }
+
     private List<PharmacyAllocation> buildFastestAllocations(
             List<Pharmacy> candidates,
             Map<UUID, List<PharmacyInventory>> inventoryByPharmacy,
             Map<UUID, Integer> needed,
+            Map<String, UUID> nameToRequestedMedId,
+            Map<UUID, String> requestedMedNames,
             double userLat, double userLng) {
 
-        record ScoredPharmacy(Pharmacy pharmacy, double distanceKm, double score,
-                               List<PharmacyInventory> matchingInventory) {}
+        class ScoredPharmacy {
+            final Pharmacy pharmacy;
+            final double distanceKm;
+            final double score;
+            final Map<UUID, PharmacyInventory> matchMap;
+
+            ScoredPharmacy(Pharmacy pharmacy, double distanceKm, double score, Map<UUID, PharmacyInventory> matchMap) {
+                this.pharmacy = pharmacy;
+                this.distanceKm = distanceKm;
+                this.score = score;
+                this.matchMap = matchMap;
+            }
+        }
 
         List<ScoredPharmacy> scored = candidates.stream()
                 .map(pharmacy -> {
                     double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
-                    List<PharmacyInventory> inv = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
-                    List<PharmacyInventory> matching = inv.stream()
-                            .filter(i -> needed.containsKey(i.getMedicine().getId()))
-                            .filter(i -> i.getQuantity() >= needed.get(i.getMedicine().getId()))
-                            .collect(Collectors.toList());
-                    return new ScoredPharmacy(pharmacy, dist, computeScore(matching.size(), dist), matching);
+                    List<PharmacyInventory> invList = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
+                    Map<UUID, PharmacyInventory> matchMap = new HashMap<>();
+                    for (PharmacyInventory inv : invList) {
+                        UUID matchedId = findMatchingRequestedMedicineId(inv, needed, nameToRequestedMedId);
+                        if (matchedId != null && inv.getQuantity() >= needed.get(matchedId)) {
+                            PharmacyInventory existing = matchMap.get(matchedId);
+                            if (existing == null || inv.getPrice().compareTo(existing.getPrice()) < 0) {
+                                matchMap.put(matchedId, inv);
+                            }
+                        }
+                    }
+                    return new ScoredPharmacy(pharmacy, dist, computeScore(matchMap.size(), dist), matchMap);
                 })
-                .sorted(Comparator.comparingDouble(ScoredPharmacy::score).reversed())
+                .sorted(Comparator.comparingDouble((ScoredPharmacy sp) -> sp.score).reversed())
                 .collect(Collectors.toList());
 
         Set<UUID> remaining = new HashSet<>(needed.keySet());
@@ -460,24 +520,35 @@ public class PharmacyMatchService {
         for (ScoredPharmacy sp : scored) {
             if (remaining.isEmpty()) break;
 
-            List<PharmacyInventory> canFulfil = sp.matchingInventory().stream()
-                    .filter(i -> remaining.contains(i.getMedicine().getId()))
-                    .collect(Collectors.toList());
+            List<PharmacyInventory> canFulfil = new ArrayList<>();
+            List<UUID> fulfilledIds = new ArrayList<>();
+
+            for (UUID reqId : remaining) {
+                PharmacyInventory inv = sp.matchMap.get(reqId);
+                if (inv != null) {
+                    canFulfil.add(inv);
+                    fulfilledIds.add(reqId);
+                }
+            }
 
             if (canFulfil.isEmpty()) continue;
 
-            Map<UUID, Integer> subsetNeeded = new HashMap<>();
-            canFulfil.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
+            List<AllocatedItem> items = new ArrayList<>();
+            for (UUID reqId : fulfilledIds) {
+                PharmacyInventory inv = sp.matchMap.get(reqId);
+                int qty = needed.get(reqId);
+                String displayName = requestedMedNames.getOrDefault(reqId, inv.getMedicine().getName());
+                BigDecimal lineTotal = inv.getPrice().multiply(BigDecimal.valueOf(qty));
+                items.add(new AllocatedItem(reqId, displayName, qty, inv.getPrice(), lineTotal));
+            }
 
-            List<AllocatedItem> items = buildAllocatedItems(canFulfil, subsetNeeded);
             BigDecimal subtotal = sumLineTotals(items);
-
             allocations.add(new PharmacyAllocation(
-                    sp.pharmacy().getId(), sp.pharmacy().getName(),
-                    sp.pharmacy().getAddress(), round(sp.distanceKm()),
-                    round(sp.score()), items, subtotal));
+                    sp.pharmacy.getId(), sp.pharmacy.getName(),
+                    sp.pharmacy.getAddress(), round(sp.distanceKm),
+                    round(sp.score), items, subtotal));
 
-            canFulfil.forEach(i -> remaining.remove(i.getMedicine().getId()));
+            fulfilledIds.forEach(remaining::remove);
         }
 
         return allocations;
@@ -487,12 +558,15 @@ public class PharmacyMatchService {
             List<Pharmacy> candidates,
             Map<UUID, List<PharmacyInventory>> inventoryByPharmacy,
             Map<UUID, Integer> needed,
+            Map<String, UUID> nameToRequestedMedId,
+            Map<UUID, String> requestedMedNames,
             double userLat, double userLng) {
 
         Map<Pharmacy, List<PharmacyInventory>> chosenMap = new LinkedHashMap<>();
+        Map<PharmacyInventory, UUID> invToRequestedId = new HashMap<>();
 
-        for (UUID medicineId : needed.keySet()) {
-            int qtyNeeded = needed.get(medicineId);
+        for (UUID requestedMedId : needed.keySet()) {
+            int qtyNeeded = needed.get(requestedMedId);
             PharmacyInventory cheapestInv = null;
             Pharmacy cheapestPharmacy = null;
             double minDistance = Double.MAX_VALUE;
@@ -501,7 +575,8 @@ public class PharmacyMatchService {
                 double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
                 List<PharmacyInventory> invList = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
                 for (PharmacyInventory inv : invList) {
-                    if (inv.getMedicine().getId().equals(medicineId) && inv.getQuantity() >= qtyNeeded) {
+                    UUID matchedId = findMatchingRequestedMedicineId(inv, needed, nameToRequestedMedId);
+                    if (requestedMedId.equals(matchedId) && inv.getQuantity() >= qtyNeeded) {
                         if (cheapestInv == null || inv.getPrice().compareTo(cheapestInv.getPrice()) < 0
                                 || (inv.getPrice().compareTo(cheapestInv.getPrice()) == 0 && dist < minDistance)) {
                             cheapestInv = inv;
@@ -514,6 +589,7 @@ public class PharmacyMatchService {
 
             if (cheapestPharmacy != null && cheapestInv != null) {
                 chosenMap.computeIfAbsent(cheapestPharmacy, k -> new ArrayList<>()).add(cheapestInv);
+                invToRequestedId.put(cheapestInv, requestedMedId);
             }
         }
 
@@ -522,9 +598,16 @@ public class PharmacyMatchService {
             Pharmacy pharmacy = entry.getKey();
             List<PharmacyInventory> invs = entry.getValue();
             double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
-            Map<UUID, Integer> subsetNeeded = new HashMap<>();
-            invs.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
-            List<AllocatedItem> items = buildAllocatedItems(invs, subsetNeeded);
+
+            List<AllocatedItem> items = new ArrayList<>();
+            for (PharmacyInventory inv : invs) {
+                UUID reqId = invToRequestedId.get(inv);
+                int qty = needed.get(reqId);
+                String displayName = requestedMedNames.getOrDefault(reqId, inv.getMedicine().getName());
+                BigDecimal lineTotal = inv.getPrice().multiply(BigDecimal.valueOf(qty));
+                items.add(new AllocatedItem(reqId, displayName, qty, inv.getPrice(), lineTotal));
+            }
+
             BigDecimal subtotal = sumLineTotals(items);
             allocations.add(new PharmacyAllocation(
                     pharmacy.getId(), pharmacy.getName(), pharmacy.getAddress(),
@@ -538,26 +621,30 @@ public class PharmacyMatchService {
             List<Pharmacy> candidates,
             Map<UUID, List<PharmacyInventory>> inventoryByPharmacy,
             Map<UUID, Integer> needed,
+            Map<String, UUID> nameToRequestedMedId,
+            Map<UUID, String> requestedMedNames,
             double userLat, double userLng) {
 
         Map<Pharmacy, List<PharmacyInventory>> chosenMap = new LinkedHashMap<>();
+        Map<PharmacyInventory, UUID> invToRequestedId = new HashMap<>();
 
-        for (UUID medicineId : needed.keySet()) {
-            int qtyNeeded = needed.get(medicineId);
+        for (UUID requestedMedId : needed.keySet()) {
+            int qtyNeeded = needed.get(requestedMedId);
             PharmacyInventory bestInv = null;
             Pharmacy bestPharmacy = null;
-            double bestValScore = Double.MAX_VALUE;
+            double bestScore = Double.MAX_VALUE;
 
             for (Pharmacy pharmacy : candidates) {
                 double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
                 List<PharmacyInventory> invList = inventoryByPharmacy.getOrDefault(pharmacy.getId(), List.of());
                 for (PharmacyInventory inv : invList) {
-                    if (inv.getMedicine().getId().equals(medicineId) && inv.getQuantity() >= qtyNeeded) {
+                    UUID matchedId = findMatchingRequestedMedicineId(inv, needed, nameToRequestedMedId);
+                    if (requestedMedId.equals(matchedId) && inv.getQuantity() >= qtyNeeded) {
                         double valScore = inv.getPrice().doubleValue() * 1.0 + dist * 0.5;
-                        if (bestInv == null || valScore < bestValScore) {
+                        if (bestInv == null || valScore < bestScore) {
                             bestInv = inv;
                             bestPharmacy = pharmacy;
-                            bestValScore = valScore;
+                            bestScore = valScore;
                         }
                     }
                 }
@@ -565,6 +652,7 @@ public class PharmacyMatchService {
 
             if (bestPharmacy != null && bestInv != null) {
                 chosenMap.computeIfAbsent(bestPharmacy, k -> new ArrayList<>()).add(bestInv);
+                invToRequestedId.put(bestInv, requestedMedId);
             }
         }
 
@@ -573,9 +661,16 @@ public class PharmacyMatchService {
             Pharmacy pharmacy = entry.getKey();
             List<PharmacyInventory> invs = entry.getValue();
             double dist = haversine(userLat, userLng, pharmacy.getLatitude(), pharmacy.getLongitude());
-            Map<UUID, Integer> subsetNeeded = new HashMap<>();
-            invs.forEach(inv -> subsetNeeded.put(inv.getMedicine().getId(), needed.get(inv.getMedicine().getId())));
-            List<AllocatedItem> items = buildAllocatedItems(invs, subsetNeeded);
+
+            List<AllocatedItem> items = new ArrayList<>();
+            for (PharmacyInventory inv : invs) {
+                UUID reqId = invToRequestedId.get(inv);
+                int qty = needed.get(reqId);
+                String displayName = requestedMedNames.getOrDefault(reqId, inv.getMedicine().getName());
+                BigDecimal lineTotal = inv.getPrice().multiply(BigDecimal.valueOf(qty));
+                items.add(new AllocatedItem(reqId, displayName, qty, inv.getPrice(), lineTotal));
+            }
+
             BigDecimal subtotal = sumLineTotals(items);
             allocations.add(new PharmacyAllocation(
                     pharmacy.getId(), pharmacy.getName(), pharmacy.getAddress(),
