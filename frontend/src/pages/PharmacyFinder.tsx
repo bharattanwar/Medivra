@@ -143,13 +143,17 @@ const PharmacyFinder: React.FC = () => {
   const [geoError, setGeoError] = useState('');
 
   // ── Smart Match Tab State ────────────────────────────────────────────────
-  const [matchMode, setMatchMode] = useState<MatchMode>('prescription');
+  const [matchMode, setMatchMode] = useState<MatchMode>(() => {
+    return (sessionStorage.getItem('med_matchMode') as MatchMode) || 'prescription';
+  });
   const [prescriptionSource, setPrescriptionSource] = useState<PrescriptionSource>('select');
 
   // Consultation Prescription Select
   const [prescriptions, setPrescriptions] = useState<MedivraPrescription[]>([]);
   const [prescLoading, setPrescLoading] = useState(false);
-  const [selectedPrescId, setSelectedPrescId] = useState<string>('');
+  const [selectedPrescId, setSelectedPrescId] = useState<string>(() => {
+    return sessionStorage.getItem('med_selectedPrescId') || '';
+  });
 
   // External Upload Prescription
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -158,24 +162,77 @@ const PharmacyFinder: React.FC = () => {
   const [uploadProgressMsg, setUploadProgressMsg] = useState('');
 
   // Verified / Identified Items Editor List
-  const [identifiedItems, setIdentifiedItems] = useState<IdentifiedItem[]>([]);
+  const [identifiedItems, setIdentifiedItems] = useState<IdentifiedItem[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('med_identifiedItems');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [verifying, setVerifying] = useState(false);
-  const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
+  const [activeRecordId, setActiveRecordId] = useState<string | null>(() => {
+    return sessionStorage.getItem('med_activeRecordId') || null;
+  });
 
   // Manual Basket Search
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<MedicineSuggestion[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
-  const [basket, setBasket] = useState<PrescriptionItem[]>([]);
+  const [basket, setBasket] = useState<PrescriptionItem[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('med_basket');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
 
   // Optimization Results
-  const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('med_matchResult');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchError, setMatchError] = useState('');
   const [matchLocation, setMatchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeMapPharmacyId, setActiveMapPharmacyId] = useState<string | null>(null);
   const [matchGeoLoading, setMatchGeoLoading] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'CHEAPEST'>('FASTEST');
+  const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'CHEAPEST'>(() => {
+    return (sessionStorage.getItem('med_selectedMode') as any) || 'FASTEST';
+  });
+
+  // Sync state changes to sessionStorage for tab persistence
+  useEffect(() => {
+    sessionStorage.setItem('med_matchMode', matchMode);
+  }, [matchMode]);
+
+  useEffect(() => {
+    sessionStorage.setItem('med_selectedPrescId', selectedPrescId);
+  }, [selectedPrescId]);
+
+  useEffect(() => {
+    if (activeRecordId) sessionStorage.setItem('med_activeRecordId', activeRecordId);
+    else sessionStorage.removeItem('med_activeRecordId');
+  }, [activeRecordId]);
+
+  useEffect(() => {
+    sessionStorage.setItem('med_identifiedItems', JSON.stringify(identifiedItems));
+  }, [identifiedItems]);
+
+  useEffect(() => {
+    sessionStorage.setItem('med_basket', JSON.stringify(basket));
+  }, [basket]);
+
+  useEffect(() => {
+    if (matchResult) {
+      sessionStorage.setItem('med_matchResult', JSON.stringify(matchResult));
+    } else {
+      sessionStorage.removeItem('med_matchResult');
+    }
+  }, [matchResult]);
+
+  useEffect(() => {
+    sessionStorage.setItem('med_selectedMode', selectedMode);
+  }, [selectedMode]);
 
   // Comparison Option Selection Helpers
   const activeOption = matchResult?.comparisonOptions?.find(o => o.type === selectedMode) || matchResult?.comparisonOptions?.[0];
@@ -617,6 +674,13 @@ const PharmacyFinder: React.FC = () => {
       setBasket([]);
       setIdentifiedItems([]);
       setMatchResult(null);
+      setSelectedPrescId('');
+      setActiveRecordId(null);
+      sessionStorage.removeItem('med_basket');
+      sessionStorage.removeItem('med_identifiedItems');
+      sessionStorage.removeItem('med_matchResult');
+      sessionStorage.removeItem('med_selectedPrescId');
+      sessionStorage.removeItem('med_activeRecordId');
       setPaymentStep('address');
       setPaymentMethod(null);
       navigate('/patient/orders');
