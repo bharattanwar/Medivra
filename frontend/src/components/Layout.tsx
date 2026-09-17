@@ -3,7 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { useWebSocket } from '../context/WebSocketContext';
 import NotificationBell from './NotificationBell';
 import PreJoinCallModal, { type PreJoinAppointmentInfo } from './PreJoinCallModal';
-import { X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall, Menu } from 'lucide-react';
+import {
+  X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall, Menu,
+  LayoutDashboard, ShoppingCart, Users, ShieldAlert, Clock, Stethoscope, LogIn, UserPlus, Building2
+} from 'lucide-react';
 
 /** Returns true if a JWT token string is expired (or unparseable). */
 const isTokenExpired = (token: string): boolean => {
@@ -58,15 +61,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   };
 
   const navLinkClass = (path: string) =>
-    `px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === path
-      ? 'bg-blue-600 text-white'
+    `flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all whitespace-nowrap ${location.pathname === path
+      ? 'bg-blue-600 text-white shadow-sm'
       : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
     }`;
 
   const mobileNavLinkClass = (path: string) =>
-    `block px-4 py-2.5 rounded-xl text-base font-semibold transition-colors ${location.pathname === path
-      ? 'bg-blue-600 text-white shadow-sm'
-      : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700'
+    `flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${location.pathname === path
+      ? 'bg-blue-600 text-white shadow-sm font-bold'
+      : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700 bg-slate-50/60'
     }`;
 
   const homePath = token
@@ -88,23 +91,26 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <Link
             to="/login"
             onClick={() => setIsMobileMenuOpen(false)}
-            className={isMobile ? mobileNavLinkClass('/login') : `px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/login' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+            className={linkClass('/login')}
           >
-            Log In
+            <LogIn className="w-4 h-4 shrink-0" />
+            <span>Log In</span>
           </Link>
           <Link
             to="/signup"
             onClick={() => setIsMobileMenuOpen(false)}
-            className={isMobile ? mobileNavLinkClass('/signup') : `px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/signup' || location.pathname === '/doctor-registration' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+            className={linkClass('/signup')}
           >
-            Sign Up
+            <UserPlus className="w-4 h-4 shrink-0" />
+            <span>Sign Up</span>
           </Link>
           <Link
             to="/pharmacy/register"
             onClick={() => setIsMobileMenuOpen(false)}
-            className={isMobile ? mobileNavLinkClass('/pharmacy/register') : `px-4 py-2 rounded-lg text-sm font-semibold transition-all ${location.pathname === '/pharmacy/register' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+            className={linkClass('/pharmacy/register')}
           >
-            Pharmacy Partner
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span>Pharmacy Partner</span>
           </Link>
         </>
       );
@@ -114,19 +120,24 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/admin/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/dashboard')}>
-            Dashboard
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span>Dashboard</span>
           </Link>
           <Link to="/admin/users" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/users')}>
-            Users
+            <Users className="w-4 h-4 shrink-0" />
+            <span>Users</span>
           </Link>
           <Link to="/admin/doctors" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/doctors')}>
-            Doctors Approval
+            <Stethoscope className="w-4 h-4 shrink-0" />
+            <span>Doctors Approval</span>
           </Link>
           <Link to="/admin/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/appointments')}>
-            Appointments/Payments
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>Appointments/Payments</span>
           </Link>
           <Link to="/hospital/emergencies" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/hospital/emergencies')}>
-            Emergency Ops
+            <ShieldAlert className="w-4 h-4 shrink-0 text-red-500" />
+            <span>Emergency Ops</span>
           </Link>
         </>
       );
@@ -136,7 +147,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/pharmacy/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/pharmacy/dashboard')}>
-            Inventory
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span>Inventory</span>
           </Link>
         </>
       );
@@ -146,13 +158,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/dashboard')}>
-            Dashboard
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span>Dashboard</span>
           </Link>
           <Link to="/doctor/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/doctor/appointments')}>
-            Appointments
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>Appointments</span>
           </Link>
           <Link to="/doctor/availability" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/doctor/availability')}>
-            Schedule
+            <Clock className="w-4 h-4 shrink-0" />
+            <span>Schedule</span>
           </Link>
         </>
       );
@@ -162,32 +177,42 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/patient/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/dashboard')}>
-            Dashboard
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span>Dashboard</span>
           </Link>
           <Link to="/patient/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/appointments')}>
-            Appointments
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>Appointments</span>
           </Link>
           <Link to="/patient/ai/reports" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/ai/reports')}>
-            Reports Result
+            <FileText className="w-4 h-4 shrink-0" />
+            <span>Reports Result</span>
           </Link>
           <Link to="/patient/ai/booking" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/ai/booking')}>
-            AI Booking
+            <Sparkles className="w-4 h-4 shrink-0 text-amber-500" />
+            <span>AI Booking</span>
           </Link>
           <Link to="/patient/pharmacy" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/pharmacy')}>
-            Order Medicines
+            <ShoppingCart className="w-4 h-4 shrink-0" />
+            <span>Order Medicines</span>
           </Link>
           <Link to="/patient/payments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/payments')}>
-            Payments
+            <CreditCard className="w-4 h-4 shrink-0" />
+            <span>Payments</span>
           </Link>
           <Link
             to="/patient/emergency"
             onClick={() => setIsMobileMenuOpen(false)}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${location.pathname === '/patient/emergency'
-                ? 'bg-red-600 text-white shadow-lg shadow-red-500/30'
-                : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
-              }`}
+            className={isMobile
+              ? `${linkClass('/patient/emergency')} border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white`
+              : `flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all whitespace-nowrap ${location.pathname === '/patient/emergency'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-500/30'
+                  : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200'
+                }`
+            }
           >
-            🚨 SOS
+            <ShieldAlert className="w-4 h-4 shrink-0 text-red-500" />
+            <span>🚨 SOS</span>
           </Link>
         </>
       );
@@ -211,17 +236,17 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+            <nav className="hidden xl:flex items-center gap-1">
               {renderNavLinks(false)}
 
               {token && (
                 <>
-                  <div className="ml-2 mr-1">
+                  <div className="ml-1 mr-1">
                     <NotificationBell onOpenPreJoin={handleOpenPreJoin} />
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="ml-2 px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
+                    className="ml-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-red-600 hover:text-white transition-colors cursor-pointer border border-slate-200"
                   >
                     Logout
                   </button>
@@ -230,7 +255,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </nav>
 
             {/* Mobile Header Controls */}
-            <div className="flex lg:hidden items-center gap-2">
+            <div className="flex xl:hidden items-center gap-2">
               {token && (
                 <div className="mr-1">
                   <NotificationBell onOpenPreJoin={handleOpenPreJoin} />
@@ -249,22 +274,22 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
         {/* Mobile Slide-Down Menu Drawer */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-slate-100 bg-white shadow-xl px-4 pt-3 pb-6 space-y-2 animate-in slide-in-from-top-2">
-            <div className="flex flex-col space-y-1.5">
+          <div className="xl:hidden border-t border-slate-100 bg-white shadow-2xl px-4 pt-3 pb-6 space-y-3 animate-in slide-in-from-top-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[75vh] overflow-y-auto">
               {renderNavLinks(true)}
             </div>
 
             {token && (
-              <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
+              <div className="pt-3 mt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Role: <span className="text-blue-600">{role || 'USER'}</span>
+                  Role: <span className="text-blue-600 font-bold">{role || 'USER'}</span>
                 </span>
                 <button
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                     handleLogout();
                   }}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors border border-rose-200 cursor-pointer shadow-sm"
                 >
                   Logout Account
                 </button>
