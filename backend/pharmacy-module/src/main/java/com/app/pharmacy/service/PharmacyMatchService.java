@@ -150,7 +150,7 @@ public class PharmacyMatchService {
                 List<PharmacyInventory> matching = new ArrayList<>(matchedInvs.values());
                 List<AllocatedItem> items = buildAllocatedItems(matching, needed, nameToRequestedMedId, requestedMedNames);
                 BigDecimal medicineTotal = sumLineTotals(items);
-                BigDecimal deliveryFee = computeDeliveryFee(dist);
+                BigDecimal deliveryFee = computeDeliveryFee(dist, medicineTotal);
                 BigDecimal totalPayable = medicineTotal.add(deliveryFee);
                 int etaMinutes = computeEtaMinutes(dist);
 
@@ -206,7 +206,7 @@ public class PharmacyMatchService {
             allocsFastest = fastestAllocations;
             medTotFastest = sumAllocationsMedicineTotal(fastestAllocations);
             double maxDist = maxAllocationsDistance(fastestAllocations);
-            delFeeFastest = computeDeliveryFee(maxDist);
+            delFeeFastest = computeDeliveryFee(maxDist, medTotFastest);
             totalFastest = medTotFastest.add(delFeeFastest);
             etaFastest = computeEtaMinutes(maxDist);
 
@@ -238,7 +238,7 @@ public class PharmacyMatchService {
 
         BigDecimal splitMedTot = sumAllocationsMedicineTotal(cheapestAllocations);
         double splitMaxDist = maxAllocationsDistance(cheapestAllocations);
-        BigDecimal splitDelFee = computeDeliveryFee(splitMaxDist);
+        BigDecimal splitDelFee = computeDeliveryFee(splitMaxDist, splitMedTot);
         BigDecimal splitTotal = splitMedTot.add(splitDelFee);
 
         CompleteCandidate cheapestSingleCand = completeCandidates.stream()
@@ -307,7 +307,7 @@ public class PharmacyMatchService {
 
         BigDecimal splitMedTotBV = sumAllocationsMedicineTotal(bestValueAllocations);
         double splitMaxDistBV = maxAllocationsDistance(bestValueAllocations);
-        BigDecimal splitDelFeeBV = computeDeliveryFee(splitMaxDistBV);
+        BigDecimal splitDelFeeBV = computeDeliveryFee(splitMaxDistBV, splitMedTotBV);
         BigDecimal splitTotalBV = splitMedTotBV.add(splitDelFeeBV);
 
         CompleteCandidate bestValSingleCand = completeCandidates.stream()
@@ -416,15 +416,15 @@ public class PharmacyMatchService {
         );
     }
 
-    // ── Delivery & ETA Calculation Helpers ────────────────────────────────────
+    public static BigDecimal computeDeliveryFee(double distanceKm, BigDecimal medicineTotal) {
+        if (medicineTotal != null && medicineTotal.compareTo(BigDecimal.valueOf(399.00)) >= 0) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(10.00);
+    }
 
     public static BigDecimal computeDeliveryFee(double distanceKm) {
-        if (distanceKm <= 2.0) {
-            return BigDecimal.valueOf(25.00);
-        }
-        double extraKm = Math.ceil(distanceKm - 2.0);
-        double fee = 25.00 + (extraKm * 5.0);
-        return BigDecimal.valueOf(fee).setScale(2, RoundingMode.HALF_UP);
+        return computeDeliveryFee(distanceKm, null);
     }
 
     public static int computeEtaMinutes(double distanceKm) {

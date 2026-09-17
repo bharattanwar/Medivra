@@ -1378,6 +1378,40 @@ const PharmacyFinder: React.FC = () => {
                     <ModeSelector selected={selectedMode} onSelect={setSelectedMode} />
                   )}
 
+                  {/* ── Free Delivery Nudge / Progress Banner ── */}
+                  {Number(displayedMedicineSubtotal) > 0 && (
+                    <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-4 shadow-sm space-y-2 border border-blue-700/50">
+                      <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-sky-400 shrink-0 animate-bounce" />
+                          {Number(displayedMedicineSubtotal) >= 399 ? (
+                            <span className="text-green-300 font-extrabold flex items-center gap-1">
+                              🎉 Congratulations! You've unlocked FREE Delivery!
+                            </span>
+                          ) : (
+                            <span>
+                              Add <strong className="text-yellow-300 font-extrabold">₹{(399 - Number(displayedMedicineSubtotal)).toFixed(2)}</strong> more to get <strong className="text-sky-300 font-bold">FREE Delivery!</strong>
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-sky-200">
+                          ₹{Number(displayedMedicineSubtotal).toFixed(0)} / ₹399
+                        </span>
+                      </div>
+                      <div className="w-full bg-blue-950/80 rounded-full h-2 overflow-hidden border border-blue-700/30">
+                        <div
+                          className="bg-gradient-to-r from-sky-400 to-emerald-400 h-full rounded-full transition-all duration-500 shadow-sm"
+                          style={{ width: `${Math.min(100, (Number(displayedMedicineSubtotal) / 399) * 100)}%` }}
+                        />
+                      </div>
+                      {Number(displayedMedicineSubtotal) < 399 && (
+                        <p className="text-[11px] text-blue-200/80 flex items-center gap-1">
+                          <span>💡 Delivery fee for orders under ₹399 is flat <strong>₹10.00</strong> per order.</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Check for No Match / No Allocations */}
                   {matchResult.allocations.length === 0 || Number(displayedTotalPayable) === 0 ? (
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center space-y-4 animate-fade-in shadow-sm">
