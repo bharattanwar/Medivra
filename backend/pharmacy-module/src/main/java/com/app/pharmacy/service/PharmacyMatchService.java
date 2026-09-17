@@ -105,9 +105,10 @@ public class PharmacyMatchService {
             });
         }
 
-        // Filter active pharmacies within search radius
+        // Filter active pharmacies within search radius (or specific pharmacy if target specified)
         List<Pharmacy> candidates = pharmacyRepository.findAll().stream()
                 .filter(p -> Boolean.TRUE.equals(p.getActive()))
+                .filter(p -> request.getPharmacyId() == null || p.getId().equals(request.getPharmacyId()))
                 .filter(p -> haversine(userLat, userLng, p.getLatitude(), p.getLongitude()) <= radiusKm)
                 .collect(Collectors.toList());
 
@@ -338,7 +339,7 @@ public class PharmacyMatchService {
     }
 
     public static BigDecimal computeDeliveryFee(double distanceKm, BigDecimal medicineTotal) {
-        if (medicineTotal != null && medicineTotal.compareTo(BigDecimal.valueOf(399.00)) >= 0) {
+        if (medicineTotal == null || medicineTotal.compareTo(BigDecimal.ZERO) <= 0 || medicineTotal.compareTo(BigDecimal.valueOf(399.00)) >= 0) {
             return BigDecimal.ZERO;
         }
         return BigDecimal.valueOf(10.00);

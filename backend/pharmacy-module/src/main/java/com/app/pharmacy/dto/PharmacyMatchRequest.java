@@ -18,6 +18,8 @@ public class PharmacyMatchRequest {
 
     private String preferredMode = "FASTEST"; // FASTEST, CHEAPEST, BEST_VALUE
 
+    private UUID pharmacyId;
+
     @NotEmpty(message = "At least one medicine is required")
     @Valid
     private List<MedicineItem> medicines;
@@ -50,4 +52,7 @@ public class PharmacyMatchRequest {
 
     public List<MedicineItem> getMedicines() { return medicines; }
     public void setMedicines(List<MedicineItem> medicines) { this.medicines = medicines; }
+
+    public UUID getPharmacyId() { return pharmacyId; }
+    public void setPharmacyId(UUID pharmacyId) { this.pharmacyId = pharmacyId; }
 }

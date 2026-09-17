@@ -200,10 +200,27 @@ const PharmacyFinder: React.FC = () => {
     return (sessionStorage.getItem('med_selectedMode') as any) || 'FASTEST';
   });
 
+  const [selectedPharmacyId, setSelectedPharmacyId] = useState<string>(() => {
+    return sessionStorage.getItem('med_selectedPharmacyId') || '';
+  });
+  const [selectedPharmacyName, setSelectedPharmacyName] = useState<string>(() => {
+    return sessionStorage.getItem('med_selectedPharmacyName') || '';
+  });
+
   // Sync state changes to sessionStorage for tab persistence
   useEffect(() => {
     sessionStorage.setItem('med_matchMode', matchMode);
   }, [matchMode]);
+
+  useEffect(() => {
+    if (selectedPharmacyId) sessionStorage.setItem('med_selectedPharmacyId', selectedPharmacyId);
+    else sessionStorage.removeItem('med_selectedPharmacyId');
+  }, [selectedPharmacyId]);
+
+  useEffect(() => {
+    if (selectedPharmacyName) sessionStorage.setItem('med_selectedPharmacyName', selectedPharmacyName);
+    else sessionStorage.removeItem('med_selectedPharmacyName');
+  }, [selectedPharmacyName]);
 
   useEffect(() => {
     sessionStorage.setItem('med_selectedPrescId', selectedPrescId);
@@ -251,10 +268,14 @@ const PharmacyFinder: React.FC = () => {
           }]
         : (matchResult?.allocations || []));
 
-  const displayedMedicineSubtotal = activeOption ? activeOption.medicineTotal : (matchResult?.totalAmount || 0);
-  const displayedDeliveryFee = activeOption ? activeOption.deliveryFee : (matchResult?.deliveryFee || 25);
-  const displayedTotalPayable = activeOption ? activeOption.totalPayable : (matchResult?.grandTotal ?? (Number(displayedMedicineSubtotal) + Number(displayedDeliveryFee)));
-  const displayedSavings = activeOption?.savingsAmount || 0;
+  const displayedMedicineSubtotal = Number(activeOption ? activeOption.medicineTotal : (matchResult?.totalAmount || 0));
+  const displayedDeliveryFee = (displayedMedicineSubtotal <= 0)
+    ? 0
+    : Number(activeOption ? (activeOption.deliveryFee ?? 0) : (matchResult?.deliveryFee ?? 0));
+  const displayedTotalPayable = (displayedMedicineSubtotal <= 0)
+    ? 0
+    : Number(activeOption ? activeOption.totalPayable : (matchResult?.grandTotal ?? (displayedMedicineSubtotal + displayedDeliveryFee)));
+  const displayedSavings = (displayedMedicineSubtotal <= 0) ? 0 : (activeOption?.savingsAmount || 0);
 
   // Checkout State
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -581,6 +602,7 @@ const PharmacyFinder: React.FC = () => {
         userLatitude: loc.lat,
         userLongitude: loc.lng,
         radiusKm: 50,
+        pharmacyId: selectedPharmacyId || undefined,
         medicines: finalBasket
       });
 
@@ -608,6 +630,7 @@ const PharmacyFinder: React.FC = () => {
         userLatitude: loc.lat,
         userLongitude: loc.lng,
         radiusKm: 50,
+        pharmacyId: selectedPharmacyId || undefined,
         medicines: basket.map(b => ({ medicineId: b.medicineId, quantity: b.quantity })),
       });
       if (res.data.success) {
@@ -676,11 +699,15 @@ const PharmacyFinder: React.FC = () => {
       setMatchResult(null);
       setSelectedPrescId('');
       setActiveRecordId(null);
+      setSelectedPharmacyId('');
+      setSelectedPharmacyName('');
       sessionStorage.removeItem('med_basket');
       sessionStorage.removeItem('med_identifiedItems');
       sessionStorage.removeItem('med_matchResult');
       sessionStorage.removeItem('med_selectedPrescId');
       sessionStorage.removeItem('med_activeRecordId');
+      sessionStorage.removeItem('med_selectedPharmacyId');
+      sessionStorage.removeItem('med_selectedPharmacyName');
       setPaymentStep('address');
       setPaymentMethod(null);
       navigate('/patient/orders');
@@ -991,6 +1018,18 @@ const PharmacyFinder: React.FC = () => {
                         <div className="flex gap-2 mt-4">
                           <button
                             type="button"
+                            onClick={() => {
+                              setSelectedPharmacyId(pharm.id);
+                              setSelectedPharmacyName(pharm.name);
+                              setActiveTab('match');
+                              setMatchResult(null);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 py-2 rounded-xl transition-colors border border-emerald-200 cursor-pointer shadow-sm"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5" /> Order from here
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setActiveMapPharmacyId(activeMapPharmacyId === pharm.id ? null : pharm.id)}
                             className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 py-2 rounded-xl transition-colors border border-blue-100 cursor-pointer"
                           >
@@ -1097,6 +1136,63 @@ const PharmacyFinder: React.FC = () => {
                   </div>
                 ) : (
                   <p className="text-xs text-amber-600 font-medium">⚠️ GPS location required for pharmacy optimization</p>
+                )}
+              </div>
+
+              {/* Specific Pharmacy Filter Selector */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4 text-emerald-600" />
+                    <h3 className="font-bold text-slate-800 text-sm">Pharmacy Selection</h3>
+                  </div>
+                  {selectedPharmacyId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPharmacyId('');
+                        setSelectedPharmacyName('');
+                        setMatchResult(null);
+                      }}
+                      className="text-xs font-semibold text-rose-600 hover:text-rose-800 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="h-3 w-3" /> Clear Filter
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  value={selectedPharmacyId}
+                  onChange={(e) => {
+                    const pId = e.target.value;
+                    setSelectedPharmacyId(pId);
+                    const pObj = nearby.find(p => p.id === pId);
+                    setSelectedPharmacyName(pObj ? pObj.name : '');
+                    setMatchResult(null);
+                  }}
+                  className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  <option value="">✨ All Nearby Pharmacies (Auto-Optimize)</option>
+                  {nearby.map(p => (
+                    <option key={p.id} value={p.id}>
+                      🏥 {p.name} ({p.distanceKm} km away)
+                    </option>
+                  ))}
+                </select>
+
+                {selectedPharmacyId ? (
+                  <div className="text-xs text-emerald-800 bg-emerald-50/80 border border-emerald-200 px-3 py-2 rounded-xl flex items-center justify-between">
+                    <span className="font-medium">
+                      🎯 Restricted to <strong>{selectedPharmacyName}</strong>
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wider bg-emerald-100 px-2 py-0.5 rounded-md">
+                      Specific Pharmacy
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">
+                    By default, Medivra automatically checks all nearby pharmacies to get you the fastest and cheapest option.
+                  </p>
                 )}
               </div>
 
