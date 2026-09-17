@@ -3,9 +3,9 @@ spring:
     name: medivra
 
   datasource:
-    url: ${PROD_DB_URL}
-    username: ${PROD_DB_USERNAME}
-    password: ${PROD_DB_PASSWORD}
+    url: ${PROD_DB_URL:jdbc:postgresql://localhost:5432/medivradb}
+    username: ${PROD_DB_USERNAME:postgres}
+    password: ${PROD_DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
