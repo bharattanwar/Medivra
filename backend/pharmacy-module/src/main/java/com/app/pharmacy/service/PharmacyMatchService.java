@@ -95,15 +95,20 @@ public class PharmacyMatchService {
         Map<String, UUID> nameToRequestedMedId = new HashMap<>();
         Map<UUID, String> requestedMedNames = new HashMap<>();
 
+        List<UUID> requestedIds = request.getMedicines().stream()
+                .map(PharmacyMatchRequest.MedicineItem::getMedicineId)
+                .collect(Collectors.toList());
+
         for (PharmacyMatchRequest.MedicineItem item : request.getMedicines()) {
             needed.put(item.getMedicineId(), item.getQuantity());
-            medicineRepository.findById(item.getMedicineId()).ifPresent(med -> {
-                if (med.getName() != null) {
-                    nameToRequestedMedId.put(med.getName().trim().toLowerCase(), med.getId());
-                    requestedMedNames.put(med.getId(), med.getName());
-                }
-            });
         }
+
+        medicineRepository.findAllById(requestedIds).forEach(med -> {
+            if (med.getName() != null) {
+                nameToRequestedMedId.put(med.getName().trim().toLowerCase(), med.getId());
+                requestedMedNames.put(med.getId(), med.getName());
+            }
+        });
 
         // Filter active pharmacies within search radius (or specific pharmacy if target specified)
         List<Pharmacy> candidates = pharmacyRepository.findAll().stream()
