@@ -551,6 +551,16 @@ const PharmacyFinder: React.FC = () => {
     setMatchResult(null);
   };
 
+  const setExplicitQty = (medicineId: string, val: number) => {
+    const q = Math.max(1, isNaN(val) ? 1 : val);
+    setBasket(prev => prev.map(item =>
+      item.medicineId === medicineId
+        ? { ...item, quantity: q }
+        : item
+    ));
+    setMatchResult(null);
+  };
+
   const removeFromBasket = (medicineId: string) => {
     setBasket(prev => prev.filter(i => i.medicineId !== medicineId));
     setMatchResult(null);
@@ -1358,19 +1368,25 @@ const PharmacyFinder: React.FC = () => {
                       {basket.map(item => (
                         <div key={item.medicineId} className="flex items-center justify-between p-3">
                           <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{item.medicineName}</p>
-                          <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg p-0.5">
+                          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
                             <button
                               type="button"
-                              onClick={() => updateQty(item.medicineId, -5)}
-                              className="p-1 rounded-md hover:bg-white text-slate-500 hover:text-slate-700"
+                              onClick={() => updateQty(item.medicineId, -1)}
+                              className="p-1 rounded-md hover:bg-white text-slate-500 hover:text-slate-700 cursor-pointer"
                             >
                               <Minus className="h-3 w-3" />
                             </button>
-                            <span className="w-6 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => setExplicitQty(item.medicineId, parseInt(e.target.value))}
+                              className="w-10 text-center text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded p-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
                             <button
                               type="button"
-                              onClick={() => updateQty(item.medicineId, 5)}
-                              className="p-1 rounded-md hover:bg-white text-slate-500 hover:text-slate-700"
+                              onClick={() => updateQty(item.medicineId, 1)}
+                              className="p-1 rounded-md hover:bg-white text-slate-500 hover:text-slate-700 cursor-pointer"
                             >
                               <Plus className="h-3 w-3" />
                             </button>
@@ -1443,17 +1459,26 @@ const PharmacyFinder: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 5) } : it));
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 1) } : it));
                                   }}
                                   className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
                                 >
                                   <Minus className="h-3 w-3" />
                                 </button>
-                                <span className="w-5 text-center text-xs font-black text-slate-800">{item.quantity}</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: val } : it));
+                                  }}
+                                  className="w-12 text-center text-xs font-black text-slate-800 bg-white border border-slate-200 rounded-lg p-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 5 } : it));
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 1 } : it));
                                   }}
                                   className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
                                 >
