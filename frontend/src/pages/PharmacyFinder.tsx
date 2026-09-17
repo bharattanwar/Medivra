@@ -55,7 +55,7 @@ interface PharmacyAllocation {
 }
 
 interface PharmacyComparisonOption {
-  type: 'FASTEST' | 'CHEAPEST' | 'BEST_VALUE';
+  type: 'FASTEST' | 'CHEAPEST';
   pharmacyId: string;
   pharmacyName: string;
   pharmacyAddress: string;
@@ -175,7 +175,7 @@ const PharmacyFinder: React.FC = () => {
   const [matchLocation, setMatchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeMapPharmacyId, setActiveMapPharmacyId] = useState<string | null>(null);
   const [matchGeoLoading, setMatchGeoLoading] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'CHEAPEST' | 'BEST_VALUE'>('FASTEST');
+  const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'CHEAPEST'>('FASTEST');
 
   // Comparison Option Selection Helpers
   const activeOption = matchResult?.comparisonOptions?.find(o => o.type === selectedMode) || matchResult?.comparisonOptions?.[0];
@@ -673,14 +673,16 @@ const PharmacyFinder: React.FC = () => {
                 });
                 onPaymentSuccess();
               } catch {
-                setPaymentError('Payment verification failed. Please contact support.');
+                setPaymentError('Payment verification failed. Please try again.');
                 setPaymentStep('method');
+                setCheckoutLoading(false);
               }
             },
             modal: {
               ondismiss: () => {
-                setPaymentError('Payment cancelled. Please try again.');
+                setPaymentError('Payment cancelled. You can click Pay Now to try again.');
                 setPaymentStep('method');
+                setCheckoutLoading(false);
               }
             }
           });
@@ -1406,7 +1408,7 @@ const PharmacyFinder: React.FC = () => {
                       </div>
                       {Number(displayedMedicineSubtotal) < 399 && (
                         <p className="text-[11px] text-blue-200/80 flex items-center gap-1">
-                          <span>💡 Delivery fee for orders under ₹399 is flat <strong>₹10.00</strong> per order.</span>
+                          <span>💡 Flat <strong>₹10.00</strong> delivery fee on orders below ₹399.</span>
                         </p>
                       )}
                     </div>

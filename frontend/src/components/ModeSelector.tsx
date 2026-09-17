@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ModeOption {
-  type: 'FASTEST' | 'CHEAPEST' | 'BEST_VALUE';
+  type: 'FASTEST' | 'CHEAPEST';
   label: string;
   description: string;
   gradientFrom: string;
@@ -10,8 +10,8 @@ interface ModeOption {
 }
 
 interface ModeSelectorProps {
-  selected: 'FASTEST' | 'CHEAPEST' | 'BEST_VALUE';
-  onSelect: (type: 'FASTEST' | 'CHEAPEST' | 'BEST_VALUE') => void;
+  selected: 'FASTEST' | 'CHEAPEST';
+  onSelect: (type: 'FASTEST' | 'CHEAPEST') => void;
 }
 
 const options: ModeOption[] = [
@@ -21,14 +21,6 @@ const options: ModeOption[] = [
     description: 'Delivery in ~20‑25 min',
     gradientFrom: 'from-emerald-600',
     gradientTo: 'to-teal-600',
-  },
-  {
-    type: 'BEST_VALUE',
-    label: '⚖️ Best Value',
-    description: 'Balanced price & speed',
-    gradientFrom: 'from-purple-600',
-    gradientTo: 'to-fuchsia-600',
-    badge: 'Recommended',
   },
   {
     type: 'CHEAPEST',
@@ -41,7 +33,7 @@ const options: ModeOption[] = [
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({ selected, onSelect }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" role="radiogroup" aria-label="Pharmacy comparison mode">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" role="radiogroup" aria-label="Pharmacy comparison mode">
       {options.map((opt) => (
         <button
           key={opt.type}
