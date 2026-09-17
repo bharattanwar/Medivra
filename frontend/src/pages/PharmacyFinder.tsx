@@ -209,8 +209,11 @@ const PharmacyFinder: React.FC = () => {
 
   const patientId = localStorage.getItem('userId');
 
-  // Listen for prefilled items passed from Rx Scanner or Report Explainer
+  // Listen for prefilled items or tab state passed from other pages
   useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
     if (location.state?.prefilledItems && location.state.prefilledItems.length > 0) {
       setActiveTab('match');
       setMatchMode('manual');

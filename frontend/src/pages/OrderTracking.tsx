@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Package, Truck, Calendar, Clock, Trash2, AlertCircle, Info,
-  RefreshCw, MapPin, Sparkles, X, Smartphone, CheckCircle2
+  RefreshCw, MapPin, Sparkles, X, Smartphone, CheckCircle2, Navigation, Pill
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -45,6 +46,7 @@ interface RefillReminder {
 }
 
 const OrderTracking: React.FC = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<MedicineOrder[]>([]);
   const [reminders, setReminders] = useState<RefillReminder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,15 +175,42 @@ const OrderTracking: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Top Banner */}
-      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3 bg-white/20 backdrop-blur px-4 py-1.5 rounded-full text-sm font-semibold w-max mb-4">
-            <Truck className="h-4 w-4 animate-bounce" /> Medicine Tracking System
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 text-center">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-3 sm:mb-4">
+            <Truck className="h-4 w-4 animate-bounce shrink-0" /> Medicine Tracking System
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Track Your Medicine Orders</h1>
-          <p className="text-blue-100 text-base max-w-xl mt-2">
+          <h1 className="text-2xl sm:text-4xl font-bold mb-2">Track Your Medicine Orders</h1>
+          <p className="text-blue-100 text-xs sm:text-base max-w-xl mx-auto px-2">
             Monitor real-time fulfillment timelines, view medicine safety info, and manage automatic refill schedules.
           </p>
+
+          {/* Tab Toggle */}
+          <div className="mt-6 sm:mt-8 grid grid-cols-3 w-full max-w-xl mx-auto bg-blue-800/60 backdrop-blur rounded-2xl p-1.5 gap-1">
+            <button
+              id="tab-nearby"
+              onClick={() => navigate('/patient/pharmacy', { state: { activeTab: 'nearby' } })}
+              className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 rounded-xl font-semibold text-[11px] sm:text-sm transition-all text-white/70 hover:text-white hover:bg-white/10 cursor-pointer w-full leading-tight min-w-0"
+            >
+              <Navigation className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>Nearby Pharmacies</span>
+            </button>
+            <button
+              id="tab-match"
+              onClick={() => navigate('/patient/pharmacy', { state: { activeTab: 'match' } })}
+              className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 rounded-xl font-semibold text-[11px] sm:text-sm transition-all text-white/70 hover:text-white hover:bg-white/10 cursor-pointer w-full leading-tight min-w-0"
+            >
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>Order Medicines</span>
+            </button>
+            <button
+              id="tab-tracking"
+              className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 rounded-xl font-semibold text-[11px] sm:text-sm transition-all bg-white text-blue-700 shadow-md w-full leading-tight min-w-0"
+            >
+              <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>Order Tracking</span>
+            </button>
+          </div>
         </div>
       </div>
 
