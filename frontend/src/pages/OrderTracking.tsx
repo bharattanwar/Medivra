@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, Truck, Calendar, Clock, Trash2, AlertCircle, Info,
-  RefreshCw, MapPin, Sparkles, X, Smartphone, CheckCircle2, Navigation, Pill
+  RefreshCw, MapPin, Sparkles, X, Smartphone, CheckCircle2, Navigation
 } from 'lucide-react';
 import api from '../services/api';
 
