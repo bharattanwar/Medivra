@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, MapPin, IndianRupee, Star, Activity, User, Loader2, Calendar, CheckCircle2 } from 'lucide-react';
+import { Search, MapPin, IndianRupee, Star, Activity, User, Loader2, Calendar, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { aiService, type AppointmentRecommendationResponse, type DoctorRecommendation } from '../services/ai';
 import api from '../services/api';
 import BookingModal from '../components/BookingModal';
@@ -312,9 +312,9 @@ export default function SmartBooking() {
                 <div className="mt-4 sm:mt-0 text-left sm:text-right">
                   <h3 className="text-sm font-medium text-gray-500">Urgency Level</h3>
                   <span className={`inline-flex mt-1 items-center px-3 py-1 rounded-full text-sm font-medium ${result.urgencyLevel === 'CRITICAL' ? 'bg-red-100 text-red-800' :
-                      result.urgencyLevel === 'HIGH' ? 'bg-orange-100 text-orange-800' :
-                        result.urgencyLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
+                    result.urgencyLevel === 'HIGH' ? 'bg-orange-100 text-orange-800' :
+                      result.urgencyLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
                     }`}>
                     {result.urgencyLevel}
                   </span>
