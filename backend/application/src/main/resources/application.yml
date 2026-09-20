@@ -1,6 +1,12 @@
 spring:
   application:
     name: medivra
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
   datasource:
     url: ${LOCAL_DB_URL:jdbc:postgresql://localhost:5432/medivradb}
     username: ${LOCAL_DB_USERNAME:postgres}
