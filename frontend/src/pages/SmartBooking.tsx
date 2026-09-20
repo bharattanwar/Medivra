@@ -58,7 +58,12 @@ export default function SmartBooking() {
       setResult(data);
       fetchDoctorDetails(data.rankedDoctors);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to get recommendations');
+      const rawMsg = err.response?.data?.message || err.message || '';
+      if (rawMsg.includes('Gemini') || rawMsg.includes('models/') || rawMsg.includes('503') || rawMsg.includes('429') || rawMsg.includes('404') || rawMsg.includes('500') || rawMsg.includes('{')) {
+        setError('The AI Assistant is currently experiencing high demand. Please try again in a few moments.');
+      } else {
+        setError(rawMsg || 'Failed to get doctor recommendations. Please try again.');
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -253,8 +258,12 @@ export default function SmartBooking() {
                 </div>
 
                 {error && (
-                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
-                    {error}
+                  <div className="flex items-start gap-2.5 text-xs text-amber-900 bg-amber-50 border border-amber-200 p-3.5 rounded-xl shadow-xs leading-relaxed">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-950">AI Assistant Busy</p>
+                      <p className="mt-0.5 text-amber-800">{error}</p>
+                    </div>
                   </div>
                 )}
 

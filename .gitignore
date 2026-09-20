@@ -49,5 +49,7 @@ frontend/.env.production
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
-
+### Uploads ###
+uploads/
+**/uploads/*
+!**/uploads/.gitkeep

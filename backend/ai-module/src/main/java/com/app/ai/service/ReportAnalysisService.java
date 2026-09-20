@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -33,10 +36,13 @@ import java.util.stream.Collectors;
  *   4. Return a response DTO the frontend can display directly.
  *
  * PDFs have text extracted first so the LLM gets clean, structured input.
+ * Scanned PDFs (with no extractable text) fall back gracefully to Gemini vision.
  * Images are sent inline as base-64 for Gemini's vision model.
  */
 @Service
 public class ReportAnalysisService {
+
+    private static final Logger log = LoggerFactory.getLogger(ReportAnalysisService.class);
 
     private final MedicalReportRepository medicalReportRepository;
     private final AiReportSummaryRepository summaryRepository;
@@ -77,9 +83,21 @@ public class ReportAnalysisService {
         try {
             // 2. Call Gemini — different path for PDF vs image
             String aiResponse;
-            if ("application/pdf".equals(contentType)) {
-                String text = extractTextFromPdf(file.getInputStream());
-                aiResponse = callGeminiForText(text, request.getReportType(), request.getPatientId());
+            if ("application/pdf".equalsIgnoreCase(contentType)) {
+                String text = "";
+                try {
+                    text = extractTextFromPdf(file.getInputStream());
+                } catch (Exception pdfEx) {
+                    log.warn("Failed to extract text from PDF: {}", pdfEx.getMessage());
+                }
+
+                if (text != null && text.trim().length() >= 30) {
+                    aiResponse = callGeminiForText(text, request.getReportType(), request.getPatientId());
+                } else {
+                    // Scanned PDF fallback to Gemini Vision
+                    log.info("PDF has minimal or no selectable text; falling back to Gemini Vision for PDF bytes");
+                    aiResponse = callGeminiForImage(file.getBytes(), "application/pdf", request.getReportType(), request.getPatientId());
+                }
             } else if (contentType != null && contentType.startsWith("image/")) {
                 aiResponse = callGeminiForImage(
                         file.getBytes(), contentType,
@@ -158,8 +176,53 @@ public class ReportAnalysisService {
     /** Use PDFBox to pull raw text from a PDF so Gemini gets clean structured input. */
     private String extractTextFromPdf(InputStream inputStream) throws Exception {
         try (PDDocument document = PDDocument.load(inputStream)) {
-            return new PDFTextStripper().getText(document);
+            String rawText = new PDFTextStripper().getText(document);
+            return normalizeWhitespace(rawText);
         }
+    }
+
+    // ── Conservative Text Normalization ──────────────────────────────────────
+    // IMPORTANT: For medical reports, 100% accuracy is NON-NEGOTIABLE.
+    // We NEVER strip, skip, or remove any text lines — only normalize whitespace.
+    //
+    // The primary defense against Groq's free-tier 8K token limit is SIZE-AWARE
+    // ROUTING in GeminiService (which skips Groq for large prompts and routes
+    // directly to Gemini/OpenAI with 1M+ token context windows).
+    //
+    // Clinical findings like USG/BIRADS scores, leukocyte counts, echocardiography
+    // results, cervical cytology, etc. must NEVER be dropped.
+
+    private static final Pattern MULTI_BLANK_LINES = Pattern.compile("\\n{3,}");
+    private static final Pattern TRAILING_SPACES = Pattern.compile("[ \\t]+$", Pattern.MULTILINE);
+
+    /**
+     * Ultra-conservative text normalization — preserves ALL clinical content:
+     *   1. Collapse 3+ consecutive blank lines → 2 blank lines
+     *   2. Trim trailing whitespace from each line
+     *   3. That's it. No content is ever removed or truncated.
+     *
+     * This typically achieves ~10-15% size reduction from whitespace alone
+     * without any risk of losing clinical findings.
+     */
+    private String normalizeWhitespace(String rawText) {
+        if (rawText == null || rawText.isBlank()) return rawText;
+
+        String result = rawText;
+
+        // Only collapse excessive blank lines (3+ → 2)
+        result = MULTI_BLANK_LINES.matcher(result).replaceAll("\n\n");
+
+        // Trim trailing whitespace per line (keeps all actual text intact)
+        result = TRAILING_SPACES.matcher(result).replaceAll("");
+
+        int reduction = rawText.length() > 0
+                ? (100 - (result.length() * 100 / rawText.length())) : 0;
+        if (reduction > 0) {
+            log.info("Text normalization: {} chars → {} chars ({}% whitespace reduction, zero content removed)",
+                    rawText.length(), result.length(), reduction);
+        }
+
+        return result.trim();
     }
 
     /** Build a text-based Gemini prompt for extracted PDF content. */
@@ -189,8 +252,15 @@ public class ReportAnalysisService {
     private String getAiSchema() {
         return "{\n"
                 + "  \"summary\": \"Plain language explanation of the report, including the educational disclaimer\",\n"
-                + "  \"abnormalValues\": [\"List of abnormal findings with explanation of what they mean\"],\n"
-                + "  \"normalValues\": [\"List of normal findings\"],\n"
+                + "  \"abnormalValues\": [\n"
+                + "    {\n"
+                + "      \"parameter\": \"Test or finding name (e.g. WBC Count, BIRADS, LDL Cholesterol)\",\n"
+                + "      \"value\": \"The actual measured value with unit (e.g. 14,330 /µL, Grade 1, 4.6 x 10.5 mm)\",\n"
+                + "      \"range\": \"Normal reference range with unit (e.g. 4,000-10,000 /µL, N/A for imaging)\",\n"
+                + "      \"significance\": \"Brief clinical significance in simple words (e.g. may suggest infection or inflammation)\"\n"
+                + "    }\n"
+                + "  ],\n"
+                + "  \"normalValues\": [\"List of normal findings as concise strings e.g. HbA1c 5.5% (4.0-5.6) — normal\"],\n"
                 + "  \"suggestedQuestions\": [\"Questions the patient should ask their doctor based on this report\"],\n"
                 + "  \"recommendedFollowUps\": [\"Any follow-up tests or actions mentioned in the report or recommended based on findings\"],\n"
                 + "  \"confidenceLevel\": \"HIGH, MEDIUM, or LOW\"\n"

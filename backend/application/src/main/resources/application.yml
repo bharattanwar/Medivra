@@ -55,10 +55,20 @@ razorpay:
 
 ai:
   gemini:
-    api-key: ${GEMINI_API_KEY}
-    model-text: gemini-3.6-flash
-    model-vision: gemini-3.6-flash
+    api-key: ${GEMINI_API_KEY:}
+    model-text: gemini-3.7-flash
+    model-vision: gemini-3.7-flash
+    model-fallback: gemini-3.5-flash-lite
     max-tokens: 4096
     temperature: 0.3
+  groq:
+    api-key: ${GROQ_API_KEY:}
+    model-text: openai/gpt-oss-120b
+    model-fallback: qwen/qwen3.8-27b
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model-text: gpt-4o-mini
+    model-vision: gpt-4o-mini
   upload:
     max-file-size: 10MB
+

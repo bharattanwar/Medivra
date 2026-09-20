@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Upload, FileText, AlertTriangle, CheckCircle2, ArrowRight, Loader2,
   ChevronDown, ChevronUp, Brain, Stethoscope, ShoppingBag,
-  Activity, Sparkles, ClipboardList, HelpCircle, Clock, RefreshCw, X, Trash2
+  Activity, Sparkles, HelpCircle, Clock, RefreshCw, X, Trash2
 } from 'lucide-react';
 import { aiService, type ReportAnalysisResponse } from '../services/ai';
 
@@ -31,27 +31,43 @@ const parseList = (raw: string): string[] => {
   }
 };
 
-interface FindingRow {
+/** Parse a raw JSON string into structured abnormal finding objects */
+interface AbnormalFinding {
   parameter: string;
   value: string;
-  status: 'abnormal' | 'normal';
-  detail: string;
+  range: string;
+  significance: string;
 }
 
-const buildFindingRows = (abnormal: string[], normal: string[]): FindingRow[] => {
-  const rows: FindingRow[] = [];
-  const parse = (line: string, status: 'abnormal' | 'normal') => {
-    const colMatch = line.match(/^(.+?)[:—\-–]\s*(.+)$/);
-    if (colMatch) {
-      rows.push({ parameter: colMatch[1].trim(), value: colMatch[2].trim(), status, detail: line });
-    } else {
-      rows.push({ parameter: line, value: '—', status, detail: line });
+const parseAbnormalFindings = (raw: string): AbnormalFinding[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => {
+        if (typeof item === 'object' && item !== null && item.parameter) {
+          return {
+            parameter: item.parameter || '',
+            value: item.value || '—',
+            range: item.range || '—',
+            significance: item.significance || '',
+          };
+        }
+        // Backward compat: plain string abnormal findings
+        const str = typeof item === 'string' ? item : JSON.stringify(item);
+        const colMatch = str.match(/^(.+?)[:—\-–]\s*(.+)$/);
+        if (colMatch) {
+          return { parameter: colMatch[1].trim(), value: colMatch[2].trim(), range: '—', significance: '' };
+        }
+        return { parameter: str, value: '—', range: '—', significance: '' };
+      });
     }
-  };
-  abnormal.forEach(l => parse(l, 'abnormal'));
-  normal.forEach(l => parse(l, 'normal'));
-  return rows;
+    return [];
+  } catch {
+    return [];
+  }
 };
+
 
 const CONFIDENCE_STYLE: Record<string, string> = {
   HIGH: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
@@ -145,7 +161,12 @@ export default function ReportExplainer() {
       setResult(data);
       loadHistory();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to analyze report. Please try again.');
+      const rawMsg = err.response?.data?.message || err.message || '';
+      if (rawMsg.includes('Gemini') || rawMsg.includes('models/') || rawMsg.includes('503') || rawMsg.includes('429') || rawMsg.includes('404') || rawMsg.includes('500') || rawMsg.includes('{')) {
+        setError('The AI Assistant is currently experiencing high demand. Please try again in a few moments.');
+      } else {
+        setError(rawMsg || 'Failed to analyze report. Please try again.');
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -153,19 +174,18 @@ export default function ReportExplainer() {
 
   const handleBookDoctor = () => {
     if (!result) return;
-    const abnormals = parseList(result.abnormalFindings);
     const context = abnormals.length > 0
-      ? `Based on my ${result.reportType} report, I have these abnormal findings: ${abnormals.slice(0, 4).join('; ')}.`
+      ? `Based on my ${result.reportType} report, I have these abnormal findings: ${abnormals.slice(0, 4).map(a => `${a.parameter}: ${a.value}`).join('; ')}.`
       : `I need a consultation after reviewing my ${result.reportType} report.`;
     navigate('/patient/ai/booking', { state: { prefillSymptoms: context } });
   };
 
   const handleOrderMedicines = () => {
     if (!result) return;
-    const abnormals = parseList(result.abnormalFindings);
+    const findingStrings = abnormals.map(a => `${a.parameter}: ${a.value} (${a.range}) — ${a.significance}`);
     navigate('/patient/pharmacy', {
       state: {
-        reportFindings: abnormals,
+        reportFindings: findingStrings,
         reportType: result.reportType,
         summary: result.summaryText
       }
@@ -173,11 +193,10 @@ export default function ReportExplainer() {
   };
 
   /* ── derived data ── */
-  const abnormals = result ? parseList(result.abnormalFindings) : [];
+  const abnormals = result ? parseAbnormalFindings(result.abnormalFindings) : [];
   const normals = result ? parseList(result.normalFindings) : [];
   const questions = result ? parseList(result.suggestedQuestions) : [];
   const followUps = result ? parseList(result.recommendedFollowUps) : [];
-  const rows = result ? buildFindingRows(abnormals, normals) : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -268,9 +287,12 @@ export default function ReportExplainer() {
                 </div>
 
                 {error && (
-                  <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{error}</span>
+                  <div className="flex items-start gap-2.5 text-xs text-amber-900 bg-amber-50 border border-amber-200/80 p-3.5 rounded-xl shadow-xs leading-relaxed">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-950">AI Service Busy</p>
+                      <p className="mt-0.5 text-amber-800">{error}</p>
+                    </div>
                   </div>
                 )}
 
@@ -419,46 +441,82 @@ export default function ReportExplainer() {
                   </div>
                 </div>
 
-                {/* Findings Table */}
-                {rows.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-6 pt-5 pb-3 border-b border-slate-100">
-                      <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                        <ClipboardList className="w-4 h-4 text-slate-400" />
-                        Test Parameters
+                {/* ── Abnormal Findings ── */}
+                {abnormals.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-red-200 overflow-hidden">
+                    <div className="px-6 pt-5 pb-3 border-b border-red-100 bg-red-50/50">
+                      <h3 className="text-base font-bold text-red-700 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                        Abnormal Findings
+                        <span className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-600 border border-red-200">
+                          {abnormals.length}
+                        </span>
                       </h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-slate-50">
+                          <tr className="bg-red-50/30">
                             <th className="text-left px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Parameter</th>
-                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Result / Detail</th>
-                            <th className="text-right px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Value</th>
+                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Range</th>
+                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Significance</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {rows.map((row, i) => (
-                            <tr key={i} className={`transition-colors ${row.status === 'abnormal' ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
-                              <td className="px-6 py-3.5 font-semibold text-slate-800">{row.parameter}</td>
-                              <td className="px-4 py-3.5 text-slate-600 max-w-xs">
-                                {row.value !== '—' ? row.value : <span className="text-slate-400 italic text-xs">{row.detail}</span>}
+                        <tbody className="divide-y divide-red-100/60">
+                          {abnormals.map((a, i) => (
+                            <tr key={i} className="bg-red-50/20 hover:bg-red-50/50 transition-colors">
+                              <td className="px-6 py-3.5 font-semibold text-slate-800">{a.parameter}</td>
+                              <td className="px-4 py-3.5">
+                                <span className="text-red-600 font-bold">{a.value || '—'}</span>
                               </td>
-                              <td className="px-6 py-3.5 text-right">
-                                {row.status === 'abnormal' ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600 border border-red-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                    Abnormal
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-600 border border-emerald-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    Normal
-                                  </span>
-                                )}
+                              <td className="px-4 py-3.5 text-xs">
+                                {a.range && a.range !== '—'
+                                  ? <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{a.range}</span>
+                                  : <span className="text-slate-300">—</span>
+                                }
+                              </td>
+                              <td className="px-4 py-3.5 text-slate-600 max-w-[280px]">
+                                <span className="text-sm leading-snug">{a.significance || '—'}</span>
                               </td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Normal Findings ── */}
+                {normals.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 pt-5 pb-3 border-b border-emerald-100 bg-emerald-50/40">
+                      <h3 className="text-base font-bold text-emerald-700 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        Normal Findings
+                        <span className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-600 border border-emerald-200">
+                          {normals.length}
+                        </span>
+                      </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-emerald-50/30">
+                            <th className="text-left px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Parameter</th>
+                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Result</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {normals.map((line, i) => {
+                            const colMatch = line.match(/^(.+?)[:—\-–]\s*(.+)$/);
+                            return (
+                              <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-3 font-medium text-slate-700">{colMatch ? colMatch[1].trim() : line}</td>
+                                <td className="px-4 py-3 text-slate-500">{colMatch ? colMatch[2].trim() : '—'}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

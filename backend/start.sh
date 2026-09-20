@@ -7,5 +7,8 @@ if [ -f .env.local ]; then
 else
   echo "No .env.local found — running in mock payment mode"
 fi
+# Free port 8080 if an old instance is running
+lsof -ti :8080 | xargs kill -9 2>/dev/null || true
+
 mvn install -DskipTests
 mvn spring-boot:run -pl application
