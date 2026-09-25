@@ -41,7 +41,11 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
   const [notes, setNotes] = useState('');
 
   // Digital Mode State
+  const [diagnosis, setDiagnosis] = useState('');
   const [medicines, setMedicines] = useState<PrescriptionMedicine[]>([]);
+  const [selectedLabTests, setSelectedLabTests] = useState<string[]>([]);
+  const [customLabTest, setCustomLabTest] = useState('');
+  const [followUpDays, setFollowUpDays] = useState<number>(7);
   const [medQuery, setMedQuery] = useState('');
   const [medSuggestions, setMedSuggestions] = useState<SystemMedicine[]>([]);
   const [doctorMedicines, setDoctorMedicines] = useState<DoctorMedicine[]>([]);
@@ -180,8 +184,11 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
           appointmentId,
           doctorId,
           patientId,
+          diagnosis,
           notes,
-          medicines
+          medicines,
+          labTests: selectedLabTests,
+          followUpDays
         });
       }
       onSuccess();
@@ -295,6 +302,18 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Diagnosis Field */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-bold text-slate-700">Diagnosis / Clinical Impression</label>
+                <input
+                  type="text"
+                  value={diagnosis}
+                  onChange={(e) => setDiagnosis(e.target.value)}
+                  placeholder="e.g. Acute Viral Bronchitis, Type 2 Diabetes Mellitus..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-slate-900"
+                />
+              </div>
+
               {/* Add Medicine Section */}
               <div className="bg-slate-50 border border-slate-100 rounded-3xl p-5 space-y-4">
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Add Medicine</h3>
@@ -477,6 +496,92 @@ const UploadPrescriptionModal: React.FC<UploadModalProps> = ({ appointmentId, pa
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Prescribed Lab Tests */}
+              <div className="space-y-2.5">
+                <label className="block text-sm font-bold text-slate-700">Prescribe Diagnostic / Lab Tests</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Complete Blood Count (CBC)',
+                    'Fasting Blood Sugar',
+                    'HbA1c Glycated Hemoglobin',
+                    'Lipid Profile',
+                    'Liver Function Test',
+                    'Kidney Function Test / Serum Creatinine',
+                    'Thyroid Profile (TSH)'
+                  ].map(test => {
+                    const isSelected = selectedLabTests.includes(test);
+                    return (
+                      <button
+                        key={test}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedLabTests(prev => prev.filter(t => t !== test));
+                          } else {
+                            setSelectedLabTests(prev => [...prev, test]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}{test}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    placeholder="Or enter custom test name..."
+                    value={customLabTest}
+                    onChange={(e) => setCustomLabTest(e.target.value)}
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customLabTest.trim()) {
+                        setSelectedLabTests(prev => [...prev, customLabTest.trim()]);
+                        setCustomLabTest('');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-900"
+                  >
+                    Add Test
+                  </button>
+                </div>
+              </div>
+
+              {/* Follow-up Consultation Recommendation */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-bold text-slate-700">Follow-up Review Consultation</label>
+                <div className="flex gap-2">
+                  {[
+                    { label: '3 Days', days: 3 },
+                    { label: '5 Days', days: 5 },
+                    { label: '7 Days (1 Week)', days: 7 },
+                    { label: '14 Days (2 Weeks)', days: 14 },
+                    { label: '30 Days (1 Month)', days: 30 }
+                  ].map(item => (
+                    <button
+                      key={item.days}
+                      type="button"
+                      onClick={() => setFollowUpDays(item.days)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                        followUpDays === item.days
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Instructions */}

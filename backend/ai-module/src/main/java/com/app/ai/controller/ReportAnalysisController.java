@@ -24,11 +24,17 @@ public class ReportAnalysisController {
     public ResponseEntity<ReportAnalysisResponse> analyzeReport(
             @RequestParam("patientId") UUID patientId,
             @RequestParam("reportType") String reportType,
+            @RequestParam(value = "isHealthJourneyFulfillment", required = false) Boolean isHealthJourneyFulfillment,
+            @RequestParam(value = "linkedLabTestId", required = false) UUID linkedLabTestId,
+            @RequestParam(value = "linkedTaskId", required = false) UUID linkedTaskId,
             @RequestParam("file") MultipartFile file) {
         
         ReportAnalysisRequest request = new ReportAnalysisRequest();
         request.setPatientId(patientId);
         request.setReportType(reportType);
+        request.setIsHealthJourneyFulfillment(isHealthJourneyFulfillment);
+        request.setLinkedLabTestId(linkedLabTestId);
+        request.setLinkedTaskId(linkedTaskId);
         request.setFile(file);
         
         return ResponseEntity.ok(reportAnalysisService.analyzeReport(request));

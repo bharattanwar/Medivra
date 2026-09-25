@@ -64,6 +64,11 @@ public class RecordController {
         return ResponseEntity.ok(recordService.getRecordsByPatient(id));
     }
 
+    @GetMapping("/doctor/{id}")
+    public ResponseEntity<List<MedicalRecord>> getDoctorRecords(@PathVariable UUID id) {
+        return ResponseEntity.ok(recordService.getRecordsByDoctor(id));
+    }
+
     @GetMapping("/appointment/{id}")
     public ResponseEntity<MedicalRecord> getAppointmentRecord(@PathVariable UUID id) {
         return ResponseEntity.ok(recordService.getRecordByAppointment(id));

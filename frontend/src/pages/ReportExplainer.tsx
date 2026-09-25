@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Upload, FileText, AlertTriangle, CheckCircle2, ArrowRight, Loader2,
   ChevronDown, ChevronUp, Brain, Stethoscope, ShoppingBag,
@@ -46,8 +46,10 @@ const parseAbnormalFindings = (raw: string): AbnormalFinding[] => {
     if (Array.isArray(parsed)) {
       return parsed.map((item) => {
         if (typeof item === 'object' && item !== null && item.parameter) {
+          const rawParam = item.parameter || '';
+          const cleanedParam = rawParam.replace(/^(CBC|Complete Blood Count|Blood Test|Lipid Panel|LFT|KFT|RFT|Thyroid Profile)\s*[:\-–—]\s*/i, '');
           return {
-            parameter: item.parameter || '',
+            parameter: cleanedParam || rawParam,
             value: item.value || '—',
             range: item.range || '—',
             significance: item.significance || '',
@@ -55,15 +57,60 @@ const parseAbnormalFindings = (raw: string): AbnormalFinding[] => {
         }
         // Backward compat: plain string abnormal findings
         const str = typeof item === 'string' ? item : JSON.stringify(item);
-        const colMatch = str.match(/^(.+?)[:—\-–]\s*(.+)$/);
+        const cleaned = str.replace(/^(CBC|Complete Blood Count|Blood Test|Lipid Panel|LFT|KFT|RFT|Thyroid Profile)\s*[:\-–—]\s*/i, '');
+        const colMatch = cleaned.match(/^(.+?)[:—\-–]\s*(.+)$/);
         if (colMatch) {
           return { parameter: colMatch[1].trim(), value: colMatch[2].trim(), range: '—', significance: '' };
         }
-        return { parameter: str, value: '—', range: '—', significance: '' };
+        return { parameter: cleaned, value: '—', range: '—', significance: '' };
       });
     }
     return [];
   } catch {
+    return [];
+  }
+};
+
+/** Parse normal findings into structured objects */
+interface NormalFinding {
+  parameter: string;
+  value: string;
+  range: string;
+}
+
+const parseNormalFindings = (raw: string): NormalFinding[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => {
+        if (typeof item === 'object' && item !== null && item.parameter) {
+          const rawParam = item.parameter || '';
+          const cleanedParam = rawParam.replace(/^(CBC|Complete Blood Count|Blood Test|Lipid Panel|LFT|KFT|RFT|Thyroid Profile)\s*[:\-–—]\s*/i, '');
+          return {
+            parameter: cleanedParam || rawParam,
+            value: item.value || 'Normal',
+            range: item.range || '—'
+          };
+        }
+        const str = typeof item === 'string' ? item : JSON.stringify(item);
+        const cleaned = str.replace(/^(CBC|Complete Blood Count|Blood Test|Lipid Panel|LFT|KFT|RFT|Thyroid Profile)\s*[:\-–—]\s*/i, '');
+        const colMatch = cleaned.match(/^(.+?)[:—\-–]\s*(.+)$/);
+        if (colMatch) {
+          return { parameter: colMatch[1].trim(), value: colMatch[2].trim(), range: '—' };
+        }
+        return { parameter: cleaned, value: 'Normal', range: '—' };
+      });
+    }
+    return [];
+  } catch {
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.split('\n').map(s => {
+        const cleaned = s.replace(/^[-•*]\s*/, '').replace(/^(CBC|Complete Blood Count|Blood Test|Lipid Panel|LFT|KFT|RFT|Thyroid Profile)\s*[:\-–—]\s*/i, '').trim();
+        const colMatch = cleaned.match(/^(.+?)[:—\-–]\s*(.+)$/);
+        return colMatch ? { parameter: colMatch[1].trim(), value: colMatch[2].trim(), range: '—' } : { parameter: cleaned, value: 'Normal', range: '—' };
+      }).filter(x => x.parameter);
+    }
     return [];
   }
 };
@@ -87,11 +134,18 @@ const REPORT_TYPES = [
 export default function ReportExplainer() {
   const patientId = localStorage.getItem('userId');
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [reportType, setReportType] = useState('Blood Test');
+  const [journeyContext, setJourneyContext] = useState<{
+    fromJourney: boolean;
+    labTestId?: string;
+    labTestName?: string;
+    taskId?: string;
+  }>({ fromJourney: false });
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<ReportAnalysisResponse | null>(null);
   const [history, setHistory] = useState<ReportAnalysisResponse[]>([]);
@@ -104,6 +158,22 @@ export default function ReportExplainer() {
   useEffect(() => {
     if (patientId) loadHistory();
   }, [patientId]);
+
+  useEffect(() => {
+    if (location.state?.fromJourney) {
+      const targetType = location.state.reportType || 'Blood Test';
+      setReportType(targetType);
+      setJourneyContext({
+        fromJourney: true,
+        labTestId: location.state.labTestId,
+        labTestName: location.state.labTestName || targetType,
+        taskId: location.state.taskId
+      });
+    } else {
+      setReportType('Blood Test');
+      setJourneyContext({ fromJourney: false });
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (result) {
@@ -157,7 +227,11 @@ export default function ReportExplainer() {
     setResult(null);
     setLoopBannerVisible(false);
     try {
-      const data = await aiService.analyzeReport(patientId, reportType, file);
+      const data = await aiService.analyzeReport(patientId, reportType, file, {
+        isHealthJourneyFulfillment: journeyContext.fromJourney,
+        linkedLabTestId: journeyContext.labTestId,
+        linkedTaskId: journeyContext.taskId
+      });
       setResult(data);
       loadHistory();
     } catch (err: any) {
@@ -194,9 +268,16 @@ export default function ReportExplainer() {
 
   /* ── derived data ── */
   const abnormals = result ? parseAbnormalFindings(result.abnormalFindings) : [];
-  const normals = result ? parseList(result.normalFindings) : [];
+  const normals = result ? parseNormalFindings(result.normalFindings) : [];
   const questions = result ? parseList(result.suggestedQuestions) : [];
   const followUps = result ? parseList(result.recommendedFollowUps) : [];
+
+  const availableReportTypes = Array.from(
+    new Set([
+      ...(reportType && !REPORT_TYPES.includes(reportType) ? [reportType] : []),
+      ...REPORT_TYPES
+    ])
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -234,9 +315,9 @@ export default function ReportExplainer() {
                   <select
                     value={reportType}
                     onChange={(e) => setReportType(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition cursor-pointer"
                   >
-                    {REPORT_TYPES.map(t => <option key={t}>{t}</option>)}
+                    {availableReportTypes.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
 
@@ -353,10 +434,10 @@ export default function ReportExplainer() {
                     <button
                       type="button"
                       onClick={(e) => handleDeleteReport(item.reportId, e)}
-                      className="absolute right-2 p-2 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer shrink-0"
+                      className="absolute right-2 p-1.5 text-slate-400 hover:text-red-600 rounded-lg bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-all cursor-pointer shrink-0 shadow-xs"
                       title="Delete analysis history"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
@@ -505,18 +586,22 @@ export default function ReportExplainer() {
                           <tr className="bg-emerald-50/30">
                             <th className="text-left px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Parameter</th>
                             <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Result</th>
+                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Reference Range</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {normals.map((line, i) => {
-                            const colMatch = line.match(/^(.+?)[:—\-–]\s*(.+)$/);
-                            return (
-                              <tr key={i} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-3 font-medium text-slate-700">{colMatch ? colMatch[1].trim() : line}</td>
-                                <td className="px-4 py-3 text-slate-500">{colMatch ? colMatch[2].trim() : '—'}</td>
-                              </tr>
-                            );
-                          })}
+                          {normals.map((item, i) => (
+                            <tr key={i} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-6 py-3 font-semibold text-slate-800">{item.parameter}</td>
+                              <td className="px-4 py-3 font-medium text-emerald-700">{item.value}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500">
+                                {item.range && item.range !== '—'
+                                  ? <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{item.range}</span>
+                                  : <span className="text-slate-400">Normal Range</span>
+                                }
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>

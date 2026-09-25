@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { isAppointmentElapsed } from '../utils/appointmentUtils';
 
+import DoctorBriefModal from '../components/DoctorBriefModal';
+
 interface AppointmentDetails {
   id: string;
   doctorId: string;
@@ -45,6 +47,7 @@ const ConsultationRoom: React.FC = () => {
   const [peerName, setPeerName] = useState<string>('Remote User');
   const [isDoctor, setIsDoctor] = useState(false);
   const [showChatDrawer, setShowChatDrawer] = useState(false);
+  const [showBriefModal, setShowBriefModal] = useState(false);
 
   // WebRTC Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -472,8 +475,17 @@ const ConsultationRoom: React.FC = () => {
           </div>
         </div>
 
-        {/* Connection Status Badge */}
+        {/* Connection Status Badge & Brief Button */}
         <div className="flex items-center gap-2.5">
+          {appointment && (
+            <button
+              onClick={() => setShowBriefModal(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/30 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              title="View Clinical Brief & Medical History"
+            >
+              📋 Clinical Brief
+            </button>
+          )}
           <div className="text-right hidden sm:block">
             <p className="text-xs font-semibold text-slate-300">{peerName}</p>
             <p className="text-[10px] text-slate-500 font-medium">Consultation Peer</p>
@@ -691,6 +703,14 @@ const ConsultationRoom: React.FC = () => {
         </div>
 
       </footer>
+
+      {showBriefModal && appointment && (
+        <DoctorBriefModal
+          patientId={appointment.patientId}
+          patientName={appointment.patientName}
+          onClose={() => setShowBriefModal(false)}
+        />
+      )}
     </div>
   );
 };

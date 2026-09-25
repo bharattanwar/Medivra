@@ -50,18 +50,21 @@ public class ReportAnalysisService {
     private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.app.record.service.DeterministicLabService deterministicLabService;
 
     public ReportAnalysisService(MedicalReportRepository medicalReportRepository,
                                  AiReportSummaryRepository summaryRepository,
                                  FileStorageService fileStorageService,
                                  GeminiService geminiService,
-                                 ApplicationEventPublisher eventPublisher) {
+                                 ApplicationEventPublisher eventPublisher,
+                                 com.app.record.service.DeterministicLabService deterministicLabService) {
         this.medicalReportRepository = medicalReportRepository;
         this.summaryRepository = summaryRepository;
         this.fileStorageService = fileStorageService;
         this.geminiService = geminiService;
         this.objectMapper = new ObjectMapper();
         this.eventPublisher = eventPublisher;
+        this.deterministicLabService = deterministicLabService;
     }
 
     @Transactional
@@ -120,11 +123,93 @@ public class ReportAnalysisService {
             summary.setRawAiResponse(aiResponse);
             summaryRepository.save(summary);
 
+            // Auto-ingest structured parameters into DeterministicLabService for exact trending
+            try {
+                com.app.record.dto.IngestLabParametersRequest ingestReq = new com.app.record.dto.IngestLabParametersRequest();
+                ingestReq.setReportId(report.getId());
+                ingestReq.setPatientId(request.getPatientId());
+                ingestReq.setTestCategory(request.getReportType());
+                ingestReq.setTestDate(java.time.LocalDate.now());
+                ingestReq.setIsHealthJourneyFulfillment(request.getIsHealthJourneyFulfillment());
+                ingestReq.setLinkedLabTestId(request.getLinkedLabTestId());
+                ingestReq.setLinkedTaskId(request.getLinkedTaskId());
+
+                List<com.app.record.dto.IngestLabParametersRequest.LabParameterInput> paramInputs = new java.util.ArrayList<>();
+                
+                // Parse abnormal values
+                JsonNode abnormalNode = root.path("abnormalValues");
+                if (abnormalNode.isArray()) {
+                    for (JsonNode item : abnormalNode) {
+                        String rawPName = item.path("parameter").asText();
+                        String pName = cleanParamName(rawPName);
+                        if (!pName.isBlank()) {
+                            com.app.record.dto.IngestLabParametersRequest.LabParameterInput pi = new com.app.record.dto.IngestLabParametersRequest.LabParameterInput();
+                            pi.setParameterName(pName);
+                            pi.setRawValue(item.path("value").asText());
+                            pi.setReferenceRangeText(item.path("range").asText());
+                            pi.setFlag("HIGH");
+                            paramInputs.add(pi);
+                        }
+                    }
+                }
+
+                // Parse normal values (supports both structured objects and legacy strings)
+                JsonNode normalNode = root.path("normalValues");
+                if (normalNode.isArray()) {
+                    for (JsonNode item : normalNode) {
+                        if (item.isObject()) {
+                            String rawPName = item.path("parameter").asText();
+                            String pName = cleanParamName(rawPName);
+                            if (!pName.isBlank()) {
+                                com.app.record.dto.IngestLabParametersRequest.LabParameterInput pi = new com.app.record.dto.IngestLabParametersRequest.LabParameterInput();
+                                pi.setParameterName(pName);
+                                pi.setRawValue(item.path("value").asText());
+                                pi.setReferenceRangeText(item.path("range").asText());
+                                pi.setFlag("NORMAL");
+                                paramInputs.add(pi);
+                            }
+                        } else {
+                            String textVal = item.asText();
+                            if (textVal != null && !textVal.isBlank()) {
+                                String[] parts = textVal.split("[:—\\-–]");
+                                String rawPName = parts[0];
+                                if (rawPName.equalsIgnoreCase("CBC") || rawPName.toLowerCase().contains("blood count") || rawPName.toLowerCase().contains("panel")) {
+                                    rawPName = parts.length > 1 ? parts[1] : textVal;
+                                }
+                                String pName = cleanParamName(rawPName);
+                                if (!pName.isBlank()) {
+                                    com.app.record.dto.IngestLabParametersRequest.LabParameterInput pi = new com.app.record.dto.IngestLabParametersRequest.LabParameterInput();
+                                    pi.setParameterName(pName);
+                                    pi.setRawValue(parts.length > 2 ? parts[2].trim() : (parts.length > 1 ? parts[1].trim() : textVal.trim()));
+                                    pi.setFlag("NORMAL");
+                                    paramInputs.add(pi);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!paramInputs.isEmpty()) {
+                    ingestReq.setParameters(paramInputs);
+                    deterministicLabService.ingestParameters(ingestReq);
+                }
+            } catch (Exception paramEx) {
+                log.warn("Failed to auto-ingest structured lab parameters: {}", paramEx.getMessage());
+            }
+
             return mapToResponse(report, summary);
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to analyze report: " + e.getMessage(), e);
         }
+    }
+
+    private String cleanParamName(String rawName) {
+        if (rawName == null) return "";
+        String cleaned = rawName.trim();
+        // Strip leading prefixes like "CBC: ", "CBC - ", "Complete Blood Count - ", etc.
+        cleaned = cleaned.replaceAll("(?i)^(CBC|Complete Blood Count|Blood Test|Lipid Panel|LFT|KFT|RFT|Thyroid Profile)\\s*[:\\-–—]\\s*", "");
+        return cleaned.trim();
     }
 
     // ── Query methods ────────────────────────────────────────────────────────
@@ -227,10 +312,17 @@ public class ReportAnalysisService {
 
     /** Build a text-based Gemini prompt for extracted PDF content. */
     private String callGeminiForText(String text, String reportType, UUID patientId) {
-        String prompt = "You are an AI Medical Assistant. Analyze the following extracted text "
-                + "from a " + reportType + " medical report.\nText:\n" + text + "\n\n"
-                + "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information "
-                + "only, not a medical diagnosis.";
+        String prompt = "You are an expert AI Clinical Laboratory Diagnostic Assistant. Analyze the provided medical report (" + reportType + ").\n\n"
+                + "CRITICAL EXTRACTION REQUIREMENTS:\n"
+                + "1. COMPREHENSIVE EXTRACTION: You MUST extract ALL measured numerical and qualitative parameters found in the report. Do NOT summarize or skip routine parameters.\n"
+                + "2. CLEAN PARAMETER NAMES: Extract individual test parameter names (e.g. 'Hemoglobin', 'Total Leukocyte Count (TLC)', 'Platelets', 'Neutrophils', 'Lymphocytes', 'Serum Creatinine', 'Bilirubin - Total', 'SGOT / AST', 'Fasting Blood Glucose', 'HbA1c').\n"
+                + "   DO NOT prefix the parameter name with the general report header or acronym (e.g., do NOT write 'CBC: Hemoglobin' or 'CBC - TLC'; write 'Hemoglobin' and 'Total Leukocyte Count (TLC)').\n"
+                + "3. SEPARATION:\n"
+                + "   - Place any out-of-reference-range or flagged findings in 'abnormalValues'.\n"
+                + "   - Place all in-range / normal findings in 'normalValues'.\n"
+                + "4. UNITS & RANGES: Always capture the exact numerical value, unit, and standard biological reference range.\n\n"
+                + "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information only, not a medical diagnosis.\n\n"
+                + "Report Content:\n" + text;
         return geminiService.generateStructuredJson(
                 prompt, getAiSchema(), "REPORT_ANALYSIS", patientId);
     }
@@ -238,10 +330,12 @@ public class ReportAnalysisService {
     /** Build an image-based Gemini prompt (raw bytes forwarded to the vision model). */
     private String callGeminiForImage(byte[] imageBytes, String mimeType,
                                        String reportType, UUID patientId) {
-        String prompt = "You are an AI Medical Assistant. Analyze the attached image of a "
-                + reportType + " medical report.\n"
-                + "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information "
-                + "only, not a medical diagnosis.\n"
+        String prompt = "You are an expert AI Clinical Laboratory Diagnostic Assistant. Analyze the attached medical report image (" + reportType + ").\n\n"
+                + "CRITICAL EXTRACTION REQUIREMENTS:\n"
+                + "1. COMPREHENSIVE EXTRACTION: Extract EVERY tested parameter from the report table into either 'abnormalValues' or 'normalValues'. Do NOT skip any rows.\n"
+                + "2. CLEAN PARAMETER NAMES: Use clean individual test names without prefixing 'CBC' or report titles.\n"
+                + "3. UNITS & RANGES: Capture exact value with unit and reference intervals.\n\n"
+                + "IMPORTANT DISCLAIMER: Add a disclaimer that this is educational information only, not a medical diagnosis.\n"
                 + "Provide the output in JSON format exactly matching this schema:\n"
                 + getAiSchema();
         return geminiService.analyzeImage(
@@ -251,18 +345,24 @@ public class ReportAnalysisService {
     /** JSON schema sent to Gemini so it knows exactly what shape to return. */
     private String getAiSchema() {
         return "{\n"
-                + "  \"summary\": \"Plain language explanation of the report, including the educational disclaimer\",\n"
+                + "  \"summary\": \"Comprehensive plain language explanation of all report findings, including educational disclaimer\",\n"
                 + "  \"abnormalValues\": [\n"
                 + "    {\n"
-                + "      \"parameter\": \"Test or finding name (e.g. WBC Count, BIRADS, LDL Cholesterol)\",\n"
-                + "      \"value\": \"The actual measured value with unit (e.g. 14,330 /µL, Grade 1, 4.6 x 10.5 mm)\",\n"
-                + "      \"range\": \"Normal reference range with unit (e.g. 4,000-10,000 /µL, N/A for imaging)\",\n"
-                + "      \"significance\": \"Brief clinical significance in simple words (e.g. may suggest infection or inflammation)\"\n"
+                + "      \"parameter\": \"Specific test parameter name (e.g. Hemoglobin, Total Leukocytes, Platelet Count, Serum Creatinine)\",\n"
+                + "      \"value\": \"Measured value with unit (e.g. 9.8 g/dL, 14,500 /µL, 1.8 mg/dL)\",\n"
+                + "      \"range\": \"Reference range with unit (e.g. 12.0-15.5 g/dL, 4,000-11,000 /µL, 0.7-1.3 mg/dL)\",\n"
+                + "      \"significance\": \"Clinical significance in simple plain words\"\n"
                 + "    }\n"
                 + "  ],\n"
-                + "  \"normalValues\": [\"List of normal findings as concise strings e.g. HbA1c 5.5% (4.0-5.6) — normal\"],\n"
+                + "  \"normalValues\": [\n"
+                + "    {\n"
+                + "      \"parameter\": \"Specific test parameter name (e.g. RBC Count, Neutrophils, Lymphocytes, SGOT, Total Bilirubin)\",\n"
+                + "      \"value\": \"Measured value with unit (e.g. 4.6 mill/cumm, 62%, 28 U/L)\",\n"
+                + "      \"range\": \"Reference range with unit (e.g. 4.0-5.2 mill/cumm, 40-75%, < 35 U/L)\"\n"
+                + "    }\n"
+                + "  ],\n"
                 + "  \"suggestedQuestions\": [\"Questions the patient should ask their doctor based on this report\"],\n"
-                + "  \"recommendedFollowUps\": [\"Any follow-up tests or actions mentioned in the report or recommended based on findings\"],\n"
+                + "  \"recommendedFollowUps\": [\"Recommended follow-up actions or monitoring based on findings\"],\n"
                 + "  \"confidenceLevel\": \"HIGH, MEDIUM, or LOW\"\n"
                 + "}";
     }

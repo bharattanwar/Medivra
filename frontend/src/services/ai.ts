@@ -86,11 +86,29 @@ export const aiService = {
   // ── 1. Report Analyzer ───────────────────────────────────────────────────
 
   /** Uploads a medical lab report (PDF/Image) for Gemini AI interpretation */
-  analyzeReport: async (patientId: string, reportType: string, file: File): Promise<ReportAnalysisResponse> => {
+  analyzeReport: async (
+    patientId: string, 
+    reportType: string, 
+    file: File, 
+    options?: {
+      isHealthJourneyFulfillment?: boolean;
+      linkedLabTestId?: string;
+      linkedTaskId?: string;
+    }
+  ): Promise<ReportAnalysisResponse> => {
     const formData = new FormData();
     formData.append('patientId', patientId);
     formData.append('reportType', reportType);
     formData.append('file', file);
+    if (options?.isHealthJourneyFulfillment) {
+      formData.append('isHealthJourneyFulfillment', 'true');
+    }
+    if (options?.linkedLabTestId) {
+      formData.append('linkedLabTestId', options.linkedLabTestId);
+    }
+    if (options?.linkedTaskId) {
+      formData.append('linkedTaskId', options.linkedTaskId);
+    }
     const response = await api.post<ReportAnalysisResponse>('/ai/reports/analyze', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

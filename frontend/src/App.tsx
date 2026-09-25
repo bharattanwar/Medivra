@@ -6,6 +6,7 @@ import Signup from './pages/Signup';
 import DoctorRegistration from './pages/DoctorRegistration';
 import Dashboard from './pages/Dashboard';
 import PatientDashboard from './pages/PatientDashboard';
+import HealthJourneyDashboard from './pages/HealthJourneyDashboard';
 import MyAppointments from './pages/MyAppointments';
 import ManageAvailability from './pages/ManageAvailability';
 import DoctorAppointments from './pages/DoctorAppointments';
@@ -40,7 +41,9 @@ function App() {
             <Route path="/doctor-registration" element={<DoctorRegistration />} />
             
             <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="/patient/dashboard" element={<PrivateRoute allowedRoles={['patient']}><PatientDashboard /></PrivateRoute>} />
+            <Route path="/patient/journey" element={<PrivateRoute allowedRoles={['patient']}><HealthJourneyDashboard /></PrivateRoute>} />
+            <Route path="/patient/dashboard" element={<PrivateRoute allowedRoles={['patient']}><HealthJourneyDashboard /></PrivateRoute>} />
+            <Route path="/patient/doctors" element={<PrivateRoute allowedRoles={['patient']}><PatientDashboard /></PrivateRoute>} />
             <Route path="/patient/appointments" element={<PrivateRoute allowedRoles={['patient']}><MyAppointments /></PrivateRoute>} />
             <Route path="/patient/payments" element={<PrivateRoute allowedRoles={['patient']}><PaymentHistory /></PrivateRoute>} />
             

@@ -5,7 +5,7 @@ import NotificationBell from './NotificationBell';
 import PreJoinCallModal, { type PreJoinAppointmentInfo } from './PreJoinCallModal';
 import {
   X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall, Menu,
-  LayoutDashboard, ShoppingCart, Users, ShieldAlert, Clock, Stethoscope, LogIn, UserPlus, Building2
+  LayoutDashboard, ShoppingCart, Users, ShieldAlert, Clock, Stethoscope, LogIn, UserPlus, Building2, Activity
 } from 'lucide-react';
 
 /** Returns true if a JWT token string is expired (or unparseable). */
@@ -177,8 +177,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/patient/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/dashboard')}>
-            <LayoutDashboard className="w-4 h-4 shrink-0" />
-            <span>Dashboard</span>
+            <Activity className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span className="font-bold">Health Journey</span>
+          </Link>
+          <Link to="/patient/doctors" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/doctors')}>
+            <Stethoscope className="w-4 h-4 shrink-0" />
+            <span>Find Doctors</span>
           </Link>
           <Link to="/patient/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/appointments')}>
             <Calendar className="w-4 h-4 shrink-0" />
@@ -186,15 +190,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           </Link>
           <Link to="/patient/ai/reports" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/ai/reports')}>
             <FileText className="w-4 h-4 shrink-0" />
-            <span>Reports Result</span>
+            <span>Reports</span>
           </Link>
           <Link to="/patient/ai/booking" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/ai/booking')}>
             <Sparkles className="w-4 h-4 shrink-0 text-amber-500" />
-            <span>AI Booking</span>
+            <span>AI Triage</span>
           </Link>
           <Link to="/patient/pharmacy" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/pharmacy')}>
             <ShoppingCart className="w-4 h-4 shrink-0" />
-            <span>Order Medicines</span>
+            <span>Pharmacy</span>
           </Link>
           <Link to="/patient/payments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/payments')}>
             <CreditCard className="w-4 h-4 shrink-0" />
