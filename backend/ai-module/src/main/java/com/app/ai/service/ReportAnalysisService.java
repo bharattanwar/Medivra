@@ -249,9 +249,14 @@ public class ReportAnalysisService {
                 java.nio.file.Files.deleteIfExists(
                         java.nio.file.Paths.get("uploads").resolve(report.getFilePath()));
             } catch (Exception ignored) {
-                // File removal is non-critical; the DB record is what matters
+                // File removal is non-critical
             }
         }
+
+        // Remove deterministic lab telemetry parameters
+        try {
+            deterministicLabService.deleteParametersByReportId(reportId);
+        } catch (Exception ignored) {}
 
         medicalReportRepository.delete(report);
     }

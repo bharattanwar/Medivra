@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { 
   X, User, Activity, Pill, AlertCircle, 
-  FileText, TrendingUp, TrendingDown, Minus, Shield, Loader2 
+  FileText, TrendingUp, TrendingDown, Minus, Shield, Loader2
 } from 'lucide-react';
-import { journeyService, type DoctorBrief, type LabTrend } from '../services/journey';
+import { journeyService, type DoctorBrief } from '../services/journey';
 
 interface DoctorBriefModalProps {
   patientId: string;
@@ -15,6 +15,7 @@ export default function DoctorBriefModal({ patientId, patientName, onClose }: Do
   const [brief, setBrief] = useState<DoctorBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'medications' | 'labTrends' | 'history'>('overview');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   useEffect(() => {
     fetchBrief();
@@ -30,35 +31,6 @@ export default function DoctorBriefModal({ patientId, patientName, onClose }: Do
     } finally {
       setLoading(false);
     }
-  };
-
-  const renderTrendBadge = (trend: LabTrend) => {
-    const isHigh = trend.latestFlag === 'HIGH' || trend.latestFlag === 'CRITICAL_HIGH';
-    const isLow = trend.latestFlag === 'LOW' || trend.latestFlag === 'CRITICAL_LOW';
-
-    return (
-      <div className="flex items-center gap-2">
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-          isHigh ? 'bg-rose-100 text-rose-700 border border-rose-200' :
-          isLow ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-          'bg-emerald-100 text-emerald-700 border border-emerald-200'
-        }`}>
-          {trend.latestRawValue} {trend.unit || ''} ({trend.latestFlag})
-        </span>
-
-        {trend.deltaNumeric !== undefined && (
-          <span className={`text-xs flex items-center font-medium ${
-            trend.trendDirection === 'INCREASED' ? 'text-blue-600' :
-            trend.trendDirection === 'DECREASED' ? 'text-purple-600' : 'text-slate-500'
-          }`}>
-            {trend.trendDirection === 'INCREASED' ? <TrendingUp className="h-3.5 w-3.5 mr-0.5" /> :
-             trend.trendDirection === 'DECREASED' ? <TrendingDown className="h-3.5 w-3.5 mr-0.5" /> :
-             <Minus className="h-3.5 w-3.5 mr-0.5" />}
-            {trend.deltaPercentage !== undefined ? `${Math.abs(trend.deltaPercentage)}%` : ''}
-          </span>
-        )}
-      </div>
-    );
   };
 
   return (
@@ -236,64 +208,168 @@ export default function DoctorBriefModal({ patientId, patientName, onClose }: Do
               {activeTab === 'labTrends' && (
                 <div className="space-y-6">
                   {brief.labTrends && brief.labTrends.length > 0 ? (
-                    <div className="space-y-4">
-                      {Array.from(new Set(brief.labTrends.map(t => t.testCategory || 'General Lab Panel'))).map(category => {
-                        const categoryTrends = (brief.labTrends || []).filter(t => (t.testCategory || 'General Lab Panel') === category);
-                        const abnormalCount = categoryTrends.filter(t => t.latestFlag === 'HIGH' || t.latestFlag === 'LOW' || t.latestFlag === 'CRITICAL_HIGH' || t.latestFlag === 'CRITICAL_LOW').length;
-                        const latestDate = categoryTrends[0]?.latestDate || 'Recent';
+                    (() => {
+                      const categories = Array.from(new Set(brief.labTrends.map(t => t.testCategory || 'General Lab Panel')));
+                      const activeCategory = selectedCategory && categories.includes(selectedCategory) ? selectedCategory : categories[0];
+                      const currentCategoryTrends = (brief.labTrends || []).filter(t => (t.testCategory || 'General Lab Panel') === activeCategory);
+                      const abnormalTrends = currentCategoryTrends.filter(t => t.latestFlag === 'HIGH' || t.latestFlag === 'LOW' || t.latestFlag === 'CRITICAL_HIGH' || t.latestFlag === 'CRITICAL_LOW');
+                      const latestDate = currentCategoryTrends[0]?.latestDate || 'Recent';
 
-                        return (
-                          <div key={category} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
-                            {/* Panel Header */}
-                            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-base">🧪</span>
-                                <div>
-                                  <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wide">{category}</h4>
-                                  <p className="text-[10px] text-slate-500 font-medium">Recorded: {latestDate}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                {abnormalCount > 0 ? (
-                                  <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-bold rounded-full text-[10px] border border-rose-200">
-                                    {abnormalCount} Abnormal
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold rounded-full text-[10px] border border-emerald-200">
-                                    ✓ All In Range
-                                  </span>
-                                )}
-                                <span className="px-2 py-0.5 bg-white text-slate-600 font-medium rounded-full text-[10px] border border-slate-200">
-                                  {categoryTrends.length} Parameters
-                                </span>
-                              </div>
-                            </div>
+                      return (
+                        <div className="space-y-4">
+                          {/* Test Category Tabs */}
+                          {categories.length > 1 && (
+                            <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-100">
+                              {categories.map(cat => {
+                                const catTrends = (brief.labTrends || []).filter(t => (t.testCategory || 'General Lab Panel') === cat);
+                                const catAbnormals = catTrends.filter(t => t.latestFlag === 'HIGH' || t.latestFlag === 'LOW' || t.latestFlag === 'CRITICAL_HIGH' || t.latestFlag === 'CRITICAL_LOW').length;
 
-                            {/* Parameter Rows */}
-                            <div className="divide-y divide-slate-100">
-                              {categoryTrends.map((t, idx) => (
-                                <div key={idx} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors">
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-bold text-xs text-slate-900">{t.parameterName}</span>
-                                    </div>
-                                    <p className="text-[11px] text-slate-500 mt-0.5">
-                                      Reference Range: <span className="font-medium text-slate-700">{t.referenceRangeText || 'N/A'}</span> • Recorded: {t.latestDate}
-                                    </p>
-                                    {t.previousValue !== undefined && (
-                                      <p className="text-[11px] text-slate-400 mt-0.5">
-                                        Baseline: {t.previousRawValue} {t.unit || ''} ({t.previousDate}) → Transition: <strong className="text-slate-600">{t.statusTransition}</strong>
-                                      </p>
+                                return (
+                                  <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                                      activeCategory === cat
+                                        ? 'bg-indigo-600 text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    <span>{cat}</span>
+                                    {catAbnormals > 0 && (
+                                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                                        activeCategory === cat ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-700'
+                                      }`}>
+                                        {catAbnormals}
+                                      </span>
                                     )}
-                                  </div>
-                                  <div className="shrink-0">{renderTrendBadge(t)}</div>
-                                </div>
-                              ))}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Active Test Panel Header */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
+                            <div>
+                              <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                                🧪 {activeCategory}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">Recorded: <strong>{latestDate}</strong></p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {abnormalTrends.length > 0 ? (
+                                <span className="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-xl text-[11px] border border-rose-200">
+                                  {abnormalTrends.length} Out of Range
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-xl text-[11px] border border-emerald-200">
+                                  ✓ All In Range
+                                </span>
+                              )}
+                              <span className="px-2.5 py-1 bg-white text-slate-600 font-semibold rounded-xl text-[11px] border border-slate-200">
+                                {currentCategoryTrends.length} Parameters
+                              </span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          {/* Variance Comparison Table - ONLY Abnormal Parameters */}
+                          {(() => {
+                            const isAbnormalFlag = (flag?: string) => {
+                              if (!flag) return false;
+                              const f = flag.toUpperCase();
+                              return f === 'HIGH' || f === 'LOW' || f === 'CRITICAL_HIGH' || f === 'CRITICAL_LOW' || f === 'ABNORMAL';
+                            };
+
+                            const abnormalOrVarianceTrends = currentCategoryTrends.filter(t => 
+                              isAbnormalFlag(t.latestFlag) || isAbnormalFlag(t.previousFlag)
+                            );
+
+                            if (abnormalOrVarianceTrends.length === 0) {
+                              return (
+                                <div className="border border-emerald-200 bg-emerald-50/50 rounded-2xl p-6 text-center shadow-xs">
+                                  <h5 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">✓ All Parameters In Normal Range</h5>
+                                  <p className="text-[11px] text-emerald-800 mt-1">
+                                    All {currentCategoryTrends.length} measured parameters for {activeCategory} fall within standard reference intervals.
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="space-y-2">
+                                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                      <thead>
+                                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                                          <th className="px-4 py-3">Abnormal / Tracked Parameter</th>
+                                          <th className="px-3 py-3">Baseline</th>
+                                          <th className="px-3 py-3">Latest Value</th>
+                                          <th className="px-3 py-3">Variance / Transition</th>
+                                          <th className="px-4 py-3">Reference Range</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {abnormalOrVarianceTrends.map((trend, idx) => (
+                                          <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                            <td className="px-4 py-3 font-bold text-slate-900">
+                                              {trend.parameterName}
+                                            </td>
+                                            <td className="px-3 py-3 text-slate-500 font-medium">
+                                              {trend.previousValue !== undefined && trend.previousValue !== null ? (
+                                                <span>{trend.previousRawValue} {trend.unit || ''}</span>
+                                              ) : (
+                                                <span className="text-slate-400 italic text-[11px]">—</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-3">
+                                              <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
+                                                trend.latestFlag === 'HIGH' || trend.latestFlag === 'CRITICAL_HIGH'
+                                                  ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                  : trend.latestFlag === 'LOW'
+                                                  ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                              }`}>
+                                                {trend.latestRawValue} {trend.unit || ''}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-3">
+                                              {trend.previousValue !== undefined && trend.previousValue !== null && trend.deltaPercentage !== undefined && trend.deltaPercentage !== 0 ? (
+                                                <span className={`font-bold flex items-center gap-1 ${
+                                                  trend.trendDirection === 'INCREASED' ? 'text-blue-600' :
+                                                  trend.trendDirection === 'DECREASED' ? 'text-purple-600' : 'text-slate-600'
+                                                }`}>
+                                                  {trend.trendDirection === 'INCREASED' ? <TrendingUp className="h-3 w-3" /> :
+                                                   trend.trendDirection === 'DECREASED' ? <TrendingDown className="h-3 w-3" /> :
+                                                   <Minus className="h-3 w-3 text-slate-400" />}
+                                                  {trend.deltaPercentage !== undefined ? `${Math.abs(trend.deltaPercentage)}%` : ''}
+                                                  <span className="text-[10px] text-slate-400 font-normal">({trend.statusTransition})</span>
+                                                </span>
+                                              ) : (
+                                                <span className="text-[11px] text-slate-400 font-normal">Baseline Reading</span>
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-3 text-slate-500 font-medium text-[11px]">
+                                              {trend.referenceRangeText || 'Standard'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+
+                                {currentCategoryTrends.length > abnormalOrVarianceTrends.length && (
+                                  <div className="px-3 py-2 bg-slate-50 rounded-xl text-center text-[11px] text-slate-500 border border-slate-100">
+                                    ✓ {currentCategoryTrends.length - abnormalOrVarianceTrends.length} other routine parameters are normal and within standard ranges.
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })()
                   ) : (
                     <div className="text-center py-12 text-slate-400">
                       <Activity className="h-10 w-10 mx-auto mb-2 text-slate-300" />

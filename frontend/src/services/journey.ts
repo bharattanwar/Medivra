@@ -95,6 +95,11 @@ export interface NextActionResponse {
   totalDosesToday: number;
   completedTasksTotal: number;
   pendingTasksTotal: number;
+  followUpBooked?: boolean;
+  followUpCompleted?: boolean;
+  followUpAppointmentDate?: string;
+  followUpAppointmentTime?: string;
+  followUpAppointmentStatus?: string;
 }
 
 export interface LabParameterReading {

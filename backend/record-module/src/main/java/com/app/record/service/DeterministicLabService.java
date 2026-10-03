@@ -119,6 +119,13 @@ public class DeterministicLabService {
         return savedList;
     }
 
+    @Transactional
+    public void deleteParametersByReportId(UUID reportId) {
+        if (reportId != null) {
+            parameterRepository.deleteByReportId(reportId);
+        }
+    }
+
     /**
      * Deterministically calculates historical trends and comparisons for all parameters of a patient.
      * Pure Java math & comparison logic — NO probabilistic guessing.

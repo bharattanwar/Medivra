@@ -17,8 +17,28 @@ public class NextActionResponse {
     private Integer totalDosesToday;
     private Integer completedTasksTotal;
     private Integer pendingTasksTotal;
+    private Boolean followUpBooked;
+    private Boolean followUpCompleted;
+    private java.time.LocalDate followUpAppointmentDate;
+    private String followUpAppointmentTime;
+    private String followUpAppointmentStatus;
 
     public NextActionResponse() {}
+
+    public Boolean getFollowUpBooked() { return followUpBooked; }
+    public void setFollowUpBooked(Boolean followUpBooked) { this.followUpBooked = followUpBooked; }
+
+    public Boolean getFollowUpCompleted() { return followUpCompleted; }
+    public void setFollowUpCompleted(Boolean followUpCompleted) { this.followUpCompleted = followUpCompleted; }
+
+    public java.time.LocalDate getFollowUpAppointmentDate() { return followUpAppointmentDate; }
+    public void setFollowUpAppointmentDate(java.time.LocalDate followUpAppointmentDate) { this.followUpAppointmentDate = followUpAppointmentDate; }
+
+    public String getFollowUpAppointmentTime() { return followUpAppointmentTime; }
+    public void setFollowUpAppointmentTime(String followUpAppointmentTime) { this.followUpAppointmentTime = followUpAppointmentTime; }
+
+    public String getFollowUpAppointmentStatus() { return followUpAppointmentStatus; }
+    public void setFollowUpAppointmentStatus(String followUpAppointmentStatus) { this.followUpAppointmentStatus = followUpAppointmentStatus; }
 
     public UUID getPatientId() { return patientId; }
     public void setPatientId(UUID patientId) { this.patientId = patientId; }

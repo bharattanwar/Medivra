@@ -29,8 +29,8 @@ export default function HealthJourneyDashboard() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiHistory, setAiHistory] = useState<Array<{ question: string; response: AiContextResponse }>>([]);
 
-  // Filter state for timeline
-  const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'CONSULTATION' | 'PRESCRIPTION' | 'LAB_REPORT' | 'CARE_TASK'>('ALL');
+  // Selected category tab for telemetry
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   useEffect(() => {
     if (patientId) {
@@ -100,11 +100,6 @@ export default function HealthJourneyDashboard() {
   };
 
   const activePlan = nextActions?.activePlan;
-
-  const filteredTimeline = timeline.filter(item => {
-    if (timelineFilter === 'ALL') return true;
-    return item.eventType === timelineFilter;
-  });
 
   if (loading) {
     return (
@@ -316,10 +311,35 @@ export default function HealthJourneyDashboard() {
                           <span className="text-emerald-600 font-bold flex items-center gap-1">
                             <Check className="h-3.5 w-3.5" /> Done
                           </span>
+                        ) : task.taskType === 'FOLLOW_UP_CONSULTATION' ? (
+                          nextActions?.followUpBooked ? (
+                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold rounded-lg border border-blue-200 flex items-center gap-1 text-[11px]">
+                              <Clock className="h-3 w-3" /> Booked: {nextActions.followUpAppointmentDate}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => navigate('/patient/dashboard')}
+                              className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              Schedule Review <ArrowRight className="h-3 w-3" />
+                            </button>
+                          )
+                        ) : task.taskType === 'REPORT_UPLOAD' || task.taskType === 'LAB_TEST' ? (
+                          <button
+                            onClick={() => navigate('/patient/ai/reports', {
+                              state: {
+                                fromJourney: true,
+                                reportType: task.title.replace('Upload Report: ', '').replace('Lab Test: ', '')
+                              }
+                            })}
+                            className="px-3 py-1 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700 transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            Upload Report <ArrowRight className="h-3 w-3" />
+                          </button>
                         ) : (
                           <button
                             onClick={() => handleCompleteTask(task.id)}
-                            className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors cursor-pointer"
                           >
                             Mark Done
                           </button>
@@ -374,26 +394,68 @@ export default function HealthJourneyDashboard() {
 
               {/* Follow-up Review Consultation Card */}
               {activePlan?.followUpDate && (
-                <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
-                      <Stethoscope className="h-4 w-4" />
+                nextActions?.followUpCompleted ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 shadow-sm">
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">Review Consultation Completed</h4>
+                        <p className="text-xs text-emerald-900/70">
+                          Concluded with {activePlan.doctorName || "Doctor"} on {nextActions.followUpAppointmentDate || activePlan.followUpDate}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900">Review Consultation</h4>
-                      <p className="text-xs text-blue-900/70">Recommended Target: {activePlan.followUpDate}</p>
-                    </div>
+                    <p className="text-xs text-emerald-800 mt-1">
+                      Follow-up review consultation successfully completed. Treatment plan and recovery milestones are up to date.
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 mb-3">
-                    Schedule review with <strong>{activePlan.doctorName || "your doctor"}</strong> to evaluate treatment progress.
-                  </p>
-                  <button
-                    onClick={() => navigate('/patient/dashboard')}
-                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
-                  >
-                    Schedule Review <ArrowRight className="h-3 w-3" />
-                  </button>
-                </div>
+                ) : nextActions?.followUpBooked ? (
+                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                        <Calendar className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">Review Consultation Booked</h4>
+                        <p className="text-xs text-blue-900/70">
+                          Scheduled: <strong>{nextActions.followUpAppointmentDate}</strong> {nextActions.followUpAppointmentTime ? `at ${nextActions.followUpAppointmentTime}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1 mb-3">
+                      Your review consultation with <strong>{activePlan.doctorName || "your doctor"}</strong> is confirmed.
+                    </p>
+                    <button
+                      onClick={() => navigate('/patient/dashboard')}
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      View Appointment Details <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                        <Stethoscope className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">Review Consultation</h4>
+                        <p className="text-xs text-blue-900/70">Recommended Target: {activePlan.followUpDate}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1 mb-3">
+                      Schedule review with <strong>{activePlan.doctorName || "your doctor"}</strong> to evaluate treatment progress.
+                    </p>
+                    <button
+                      onClick={() => navigate('/patient/dashboard')}
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Schedule Review <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
               )}
 
               {/* Upload Report Shortcut */}
@@ -429,106 +491,183 @@ export default function HealthJourneyDashboard() {
             ═══════════════════════════════════════════════════════════════════ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* LEFT: DETERMINISTIC LAB TRENDS (Segregated by Report / Test Category) */}
+          {/* LEFT: DETERMINISTIC LAB TELEMETRY & VARIANCE TRACKING */}
           <div className="lg:col-span-6 space-y-6">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
                   <TrendingUp className="h-5 w-5 text-indigo-600" />
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-base">Lab Telemetry & Report Panels</h3>
-                    <p className="text-[11px] text-slate-500">Segregated by test panel and collection date</p>
+                    <h3 className="font-extrabold text-slate-900 text-base">Lab Telemetry & Variances</h3>
+                    <p className="text-[11px] text-slate-500">Compare parameter values & variance for your lab tests</p>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Pure Mathematical Deltas
-                </span>
               </div>
 
               {labTrends && labTrends.length > 0 ? (
-                <div className="space-y-5">
-                  {/* Category / Panel Grouping */}
-                  {Array.from(new Set(labTrends.map(t => t.testCategory || 'General Lab Panel'))).map(category => {
-                    const categoryTrends = labTrends.filter(t => (t.testCategory || 'General Lab Panel') === category);
-                    const abnormalCount = categoryTrends.filter(t => t.latestFlag === 'HIGH' || t.latestFlag === 'LOW' || t.latestFlag === 'CRITICAL_HIGH').length;
-                    const latestDate = categoryTrends[0]?.latestDate || 'Recent';
+                (() => {
+                  const categories = Array.from(new Set(labTrends.map(t => t.testCategory || 'General Lab Panel')));
+                  const activeCategory = selectedCategory && categories.includes(selectedCategory) ? selectedCategory : categories[0];
+                  const currentCategoryTrends = labTrends.filter(t => (t.testCategory || 'General Lab Panel') === activeCategory);
+                  const abnormalTrends = currentCategoryTrends.filter(t => t.latestFlag === 'HIGH' || t.latestFlag === 'LOW' || t.latestFlag === 'CRITICAL_HIGH' || t.latestFlag === 'CRITICAL_LOW');
+                  const latestDate = currentCategoryTrends[0]?.latestDate || 'Recent';
 
-                    return (
-                      <div key={category} className="border border-slate-200/90 rounded-2xl overflow-hidden bg-slate-50/50 shadow-xs">
-                        {/* Panel Header */}
-                        <div className="bg-slate-100/80 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🧪</span>
-                            <div>
-                              <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wide">{category}</h4>
-                              <p className="text-[10px] text-slate-500 font-medium">Recorded: {latestDate}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {abnormalCount > 0 ? (
-                              <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-bold rounded-full text-[10px] border border-rose-200">
-                                {abnormalCount} Abnormal
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold rounded-full text-[10px] border border-emerald-200">
-                                ✓ All Normal
-                              </span>
-                            )}
-                            <span className="px-2 py-0.5 bg-white text-slate-600 font-medium rounded-full text-[10px] border border-slate-200">
-                              {categoryTrends.length} Tests
-                            </span>
-                          </div>
+                  return (
+                    <div className="space-y-4">
+                      {/* Test Category Tabs */}
+                      {categories.length > 1 && (
+                        <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-100">
+                          {categories.map(cat => {
+                            const catTrends = labTrends.filter(t => (t.testCategory || 'General Lab Panel') === cat);
+                            const catAbnormals = catTrends.filter(t => t.latestFlag === 'HIGH' || t.latestFlag === 'LOW' || t.latestFlag === 'CRITICAL_HIGH' || t.latestFlag === 'CRITICAL_LOW').length;
+
+                            return (
+                              <button
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                                  activeCategory === cat
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                              >
+                                <span>{cat}</span>
+                                {catAbnormals > 0 && (
+                                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                                    activeCategory === cat ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-700'
+                                  }`}>
+                                    {catAbnormals}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
+                      )}
 
-                        {/* Parameter Rows */}
-                        <div className="divide-y divide-slate-100 bg-white">
-                          {categoryTrends.map((trend, idx) => (
-                            <div key={idx} className="p-3.5 hover:bg-slate-50/80 transition-colors">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="font-bold text-xs text-slate-900">{trend.parameterName}</p>
-                                  <p className="text-[11px] text-slate-500 mt-0.5">
-                                    Ref: {trend.referenceRangeText || 'Standard Range'}
-                                  </p>
-                                </div>
-
-                                <div className="text-right shrink-0">
-                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                    trend.latestFlag === 'HIGH' || trend.latestFlag === 'CRITICAL_HIGH'
-                                      ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                                      : trend.latestFlag === 'LOW'
-                                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                      : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                  }`}>
-                                    {trend.latestRawValue} {trend.unit || ''}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {trend.previousValue !== undefined && (
-                                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                                  <span className="text-slate-400">
-                                    Baseline: {trend.previousRawValue} {trend.unit || ''} ({trend.previousDate})
-                                  </span>
-                                  <span className={`font-bold flex items-center gap-1 ${
-                                    trend.trendDirection === 'INCREASED' ? 'text-blue-600' :
-                                    trend.trendDirection === 'DECREASED' ? 'text-purple-600' : 'text-slate-600'
-                                  }`}>
-                                    {trend.trendDirection === 'INCREASED' ? <TrendingUp className="h-3 w-3" /> :
-                                     trend.trendDirection === 'DECREASED' ? <TrendingDown className="h-3 w-3" /> :
-                                     <Minus className="h-3 w-3 text-slate-400" />}
-                                    {trend.deltaPercentage !== undefined ? `${Math.abs(trend.deltaPercentage)}% delta` : ''}
-                                    <span className="text-[10px] text-slate-400 font-normal">({trend.statusTransition})</span>
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                      {/* Active Test Panel Header */}
+                      <div className="bg-slate-50/90 p-4 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                            🧪 {activeCategory}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Collection Date: <strong>{latestDate}</strong></p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {abnormalTrends.length > 0 ? (
+                            <span className="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-xl text-[11px] border border-rose-200">
+                              {abnormalTrends.length} Out of Range
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-xl text-[11px] border border-emerald-200">
+                              ✓ All In Range
+                            </span>
+                          )}
+                          <span className="px-2.5 py-1 bg-white text-slate-600 font-semibold rounded-xl text-[11px] border border-slate-200">
+                            {currentCategoryTrends.length} Parameters
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {/* Variance Comparison Table - ONLY Abnormal Parameters */}
+                      {(() => {
+                        const isAbnormalFlag = (flag?: string) => {
+                          if (!flag) return false;
+                          const f = flag.toUpperCase();
+                          return f === 'HIGH' || f === 'LOW' || f === 'CRITICAL_HIGH' || f === 'CRITICAL_LOW' || f === 'ABNORMAL';
+                        };
+
+                        const abnormalOrVarianceTrends = currentCategoryTrends.filter(t => 
+                          isAbnormalFlag(t.latestFlag) || isAbnormalFlag(t.previousFlag)
+                        );
+
+                        if (abnormalOrVarianceTrends.length === 0) {
+                          return (
+                            <div className="border border-emerald-200 bg-emerald-50/50 rounded-2xl p-6 text-center shadow-xs">
+                              <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+                              <h5 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">All Parameters In Normal Range</h5>
+                              <p className="text-[11px] text-emerald-800 mt-1">
+                                All {currentCategoryTrends.length} measured parameters for {activeCategory} fall within standard biological reference intervals.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-2">
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                  <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                                      <th className="px-4 py-3">Abnormal / Tracked Parameter</th>
+                                      <th className="px-3 py-3">Baseline</th>
+                                      <th className="px-3 py-3">Latest Value</th>
+                                      <th className="px-3 py-3">Variance</th>
+                                      <th className="px-4 py-3">Reference Range</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {abnormalOrVarianceTrends.map((trend, idx) => (
+                                      <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                        <td className="px-4 py-3 font-bold text-slate-900">
+                                          {trend.parameterName}
+                                        </td>
+                                        <td className="px-3 py-3 text-slate-500 font-medium">
+                                          {trend.previousValue !== undefined && trend.previousValue !== null ? (
+                                            <span>{trend.previousRawValue} {trend.unit || ''}</span>
+                                          ) : (
+                                            <span className="text-slate-400 italic text-[11px]">—</span>
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
+                                            trend.latestFlag === 'HIGH' || trend.latestFlag === 'CRITICAL_HIGH'
+                                              ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                              : trend.latestFlag === 'LOW'
+                                              ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                              : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                          }`}>
+                                            {trend.latestRawValue} {trend.unit || ''}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          {trend.previousValue !== undefined && trend.previousValue !== null && trend.deltaPercentage !== undefined && trend.deltaPercentage !== 0 ? (
+                                            <span className={`font-bold flex items-center gap-1 ${
+                                              trend.trendDirection === 'INCREASED' ? 'text-blue-600' :
+                                              trend.trendDirection === 'DECREASED' ? 'text-purple-600' : 'text-slate-600'
+                                            }`}>
+                                              {trend.trendDirection === 'INCREASED' ? <TrendingUp className="h-3 w-3" /> :
+                                               trend.trendDirection === 'DECREASED' ? <TrendingDown className="h-3 w-3" /> :
+                                               <Minus className="h-3 w-3 text-slate-400" />}
+                                              {trend.deltaPercentage !== undefined ? `${Math.abs(trend.deltaPercentage)}%` : ''}
+                                              <span className="text-[10px] text-slate-400 font-normal">({trend.statusTransition})</span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-[11px] text-slate-400 font-normal">Baseline Reading</span>
+                                          )}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-500 font-medium text-[11px]">
+                                          {trend.referenceRangeText || 'Standard'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                            {currentCategoryTrends.length > abnormalOrVarianceTrends.length && (
+                              <div className="px-3 py-2 bg-slate-50 rounded-xl text-center text-[11px] text-slate-500 border border-slate-100">
+                                ✓ {currentCategoryTrends.length - abnormalOrVarianceTrends.length} other routine parameters are normal and within standard ranges.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="py-12 text-center text-slate-400">
                   <Activity className="h-10 w-10 mx-auto mb-2 text-slate-300" />
@@ -543,33 +682,19 @@ export default function HealthJourneyDashboard() {
           <div className="lg:col-span-6 space-y-6">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
               
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
                   <Calendar className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-extrabold text-slate-900 text-base">Unified Health Timeline</h3>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base">Unified Health Timeline</h3>
+                    <p className="text-[11px] text-slate-500">Chronological history of your care journey events</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Filter Pills */}
-              <div className="flex flex-wrap gap-1.5 mb-5 pb-3 border-b border-slate-100">
-                {(['ALL', 'CONSULTATION', 'PRESCRIPTION', 'LAB_REPORT', 'CARE_TASK'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setTimelineFilter(f)}
-                    className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
-                      timelineFilter === f
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {f === 'ALL' ? 'All Events' : f.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-
-              {filteredTimeline.length > 0 ? (
-                <div className="relative pl-6 border-l-2 border-blue-100 space-y-6">
-                  {filteredTimeline.map((item) => (
+              {timeline && timeline.length > 0 ? (
+                <div className="relative pl-6 border-l-2 border-blue-100 space-y-4">
+                  {timeline.map((item) => (
                     <div key={item.id} className="relative group">
                       {/* Timeline Node Icon */}
                       <div className="absolute -left-[31px] top-0 w-8 h-8 rounded-full bg-white border-2 border-blue-500 flex items-center justify-center text-blue-600 shadow-sm group-hover:scale-110 transition-transform">
@@ -580,7 +705,7 @@ export default function HealthJourneyDashboard() {
                         {item.eventType === 'CARE_TASK' && <CheckCircle2 className="h-3.5 w-3.5" />}
                       </div>
 
-                      <div className="bg-slate-50/80 hover:bg-slate-50 p-4 rounded-2xl border border-slate-100 transition-colors">
+                      <div className="bg-slate-50/80 hover:bg-slate-50 p-3.5 rounded-2xl border border-slate-100 transition-colors">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                             {new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -589,9 +714,9 @@ export default function HealthJourneyDashboard() {
                             {item.status}
                           </span>
                         </div>
-                        <h4 className="font-bold text-slate-900 text-sm">{item.title}</h4>
-                        {item.subtitle && <p className="text-xs text-slate-600 font-medium mt-0.5">{item.subtitle}</p>}
-                        {item.description && <p className="text-xs text-slate-500 mt-1 leading-relaxed">{item.description}</p>}
+                        <h4 className="font-bold text-slate-900 text-xs">{item.title}</h4>
+                        {item.subtitle && <p className="text-[11px] text-slate-600 font-medium mt-0.5">{item.subtitle}</p>}
+                        {item.description && <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">{item.description}</p>}
                       </div>
                     </div>
                   ))}

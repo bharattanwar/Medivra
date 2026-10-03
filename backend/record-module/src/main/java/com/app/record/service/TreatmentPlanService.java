@@ -211,12 +211,17 @@ public class TreatmentPlanService {
     }
 
     /**
-     * Complete a care task.
+     * Completes a general care task.
+     * Enforces clinical verification: follow-up consultations can only be marked completed upon actual doctor consultation conclusion.
      */
     @Transactional
     public CareTask completeCareTask(UUID taskId) {
         CareTask task = careTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Care task not found: " + taskId));
+
+        if ("FOLLOW_UP_CONSULTATION".equalsIgnoreCase(task.getTaskType())) {
+            throw new IllegalStateException("Follow-up consultations can only be completed when the doctor appointment is concluded.");
+        }
 
         task.setStatus("COMPLETED");
         task.setCompletedAt(LocalDateTime.now());
@@ -231,6 +236,35 @@ public class TreatmentPlanService {
             });
         }
         return saved;
+    }
+
+    /**
+     * Automatic fulfillment when a doctor concludes a consultation or video session.
+     */
+    @org.springframework.context.event.EventListener
+    @Transactional
+    public void onConsultationCompleted(com.app.common.event.ConsultationCompletedEvent event) {
+        log.info("Fulfilling follow-up care tasks for patient {} after consultation {}", event.getPatientId(), event.getAppointmentId());
+        List<CareTask> tasks = careTaskRepository.findByPatientIdOrderByDueDateAsc(event.getPatientId())
+                .stream()
+                .filter(t -> "FOLLOW_UP_CONSULTATION".equalsIgnoreCase(t.getTaskType()) && !"COMPLETED".equalsIgnoreCase(t.getStatus()))
+                .collect(Collectors.toList());
+
+        for (CareTask t : tasks) {
+            t.setStatus("COMPLETED");
+            t.setCompletedAt(LocalDateTime.now());
+            t.setReferenceId(event.getAppointmentId());
+            careTaskRepository.save(t);
+
+            if (t.getTreatmentPlanId() != null) {
+                treatmentPlanRepository.findById(t.getTreatmentPlanId()).ifPresent(plan -> {
+                    int completed = (int) careTaskRepository.findByTreatmentPlanId(plan.getId())
+                            .stream().filter(ct -> "COMPLETED".equals(ct.getStatus())).count();
+                    plan.setCompletedTasks(completed);
+                    treatmentPlanRepository.save(plan);
+                });
+            }
+        }
     }
 
     public TreatmentPlanDto getPlanDtoById(UUID planId) {

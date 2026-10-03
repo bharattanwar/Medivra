@@ -9,6 +9,12 @@ else
 fi
 # Free port 8080 if an old instance is running
 lsof -ti :8080 | xargs kill -9 2>/dev/null || true
+sleep 1
 
-mvn install -DskipTests
-mvn spring-boot:run -pl application
+if [ ! -f application/target/application-0.0.1-SNAPSHOT.jar ]; then
+  mvn clean package -DskipTests -pl application -am
+fi
+
+exec java -Xmx512m -jar application/target/application-0.0.1-SNAPSHOT.jar
+
+

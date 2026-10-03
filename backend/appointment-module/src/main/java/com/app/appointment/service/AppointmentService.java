@@ -413,6 +413,14 @@ public class AppointmentService {
         appointment.setStatus(AppointmentStatus.COMPLETED);
         Appointment saved = appointmentRepository.save(appointment);
 
+        // Publish domain event for care task and treatment plan fulfillment
+        publishEvent(new com.app.common.event.ConsultationCompletedEvent(
+                this,
+                saved.getId(),
+                appointment.getPatient().getId(),
+                appointment.getDoctor().getId()
+        ), "ConsultationCompletedEvent");
+
         // Notify the patient that their consultation is complete
         publishEvent(new NotificationEvent(
                 this,
@@ -450,6 +458,13 @@ public class AppointmentService {
             appointment.setStatus(AppointmentStatus.COMPLETED);
             appointmentRepository.save(appointment);
             log.info("Auto-completed video consultation for appointment {}", appointmentId);
+
+            publishEvent(new com.app.common.event.ConsultationCompletedEvent(
+                    this,
+                    appointmentId,
+                    appointment.getPatient().getId(),
+                    appointment.getDoctor().getId()
+            ), "ConsultationCompletedEvent");
 
             publishEvent(new NotificationEvent(
                     this,

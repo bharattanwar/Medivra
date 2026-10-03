@@ -132,15 +132,32 @@ public class HealthTimelineService {
             event.setId("lab-" + entry.getKey());
             event.setEventType("LAB_REPORT");
             event.setTimestamp(first.getCreatedAt() != null ? first.getCreatedAt() : first.getTestDate().atStartOfDay());
-            event.setTitle(first.getTestCategory() != null ? first.getTestCategory() + " Report" : "Diagnostic Lab Report");
+            event.setTitle(first.getTestCategory() != null ? first.getTestCategory() + " Uploaded" : "Diagnostic Lab Report Uploaded");
             
-            String summary = group.stream().map(g -> g.getParameterName() + ": " + g.getRawValue() + " " + (g.getUnit() != null ? g.getUnit() : "") + " [" + g.getFlag() + "]")
-                    .reduce((a, b) -> a + " • " + b).orElse("Structured findings recorded");
+            long abnormalCount = group.stream().filter(g -> "HIGH".equalsIgnoreCase(g.getFlag()) 
+                    || "LOW".equalsIgnoreCase(g.getFlag()) 
+                    || "CRITICAL_HIGH".equalsIgnoreCase(g.getFlag()) 
+                    || "CRITICAL_LOW".equalsIgnoreCase(g.getFlag())).count();
             
-            event.setSubtitle(group.size() + " structured parameters analyzed");
-            event.setDescription(summary);
+            if (abnormalCount > 0) {
+                event.setSubtitle(group.size() + " parameters evaluated • " + abnormalCount + " out of reference range");
+                String flaggedNames = group.stream()
+                        .filter(g -> "HIGH".equalsIgnoreCase(g.getFlag()) 
+                                || "LOW".equalsIgnoreCase(g.getFlag()) 
+                                || "CRITICAL_HIGH".equalsIgnoreCase(g.getFlag()) 
+                                || "CRITICAL_LOW".equalsIgnoreCase(g.getFlag()))
+                        .limit(3)
+                        .map(g -> g.getParameterName() + " (" + g.getRawValue() + (g.getUnit() != null && !g.getUnit().isBlank() ? " " + g.getUnit() : "") + ")")
+                        .reduce((a, b) -> a + ", " + b).orElse("");
+                event.setDescription("Flagged parameters: " + flaggedNames + (abnormalCount > 3 ? " +" + (abnormalCount - 3) + " more" : ""));
+                event.setStatusBadgeColor("rose");
+            } else {
+                event.setSubtitle(group.size() + " parameters evaluated • All in normal range");
+                event.setDescription("All measured laboratory values fall within standard biological reference ranges.");
+                event.setStatusBadgeColor("emerald");
+            }
+            
             event.setStatus("ANALYZED");
-            event.setStatusBadgeColor("teal");
             event.setIconType("FileText");
             event.setReferenceId(first.getReportId());
             timeline.add(event);

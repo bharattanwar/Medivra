@@ -20,22 +20,25 @@ public class NextActionService {
     private final CareTaskRepository careTaskRepository;
     private final TreatmentLabTestRepository labTestRepository;
     private final DoctorRepository doctorRepository;
+    private final com.app.appointment.repository.AppointmentRepository appointmentRepository;
 
     public NextActionService(TreatmentPlanService treatmentPlanService,
                              MedicationDoseLogRepository doseLogRepository,
                              TreatmentMedicationRepository treatmentMedicationRepository,
                              CareTaskRepository careTaskRepository,
                              TreatmentLabTestRepository labTestRepository,
-                             DoctorRepository doctorRepository) {
+                             DoctorRepository doctorRepository,
+                             com.app.appointment.repository.AppointmentRepository appointmentRepository) {
         this.treatmentPlanService = treatmentPlanService;
         this.doseLogRepository = doseLogRepository;
         this.treatmentMedicationRepository = treatmentMedicationRepository;
         this.careTaskRepository = careTaskRepository;
         this.labTestRepository = labTestRepository;
         this.doctorRepository = doctorRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public NextActionResponse getNextActionsForPatient(UUID patientId) {
         LocalDate today = LocalDate.now();
         NextActionResponse response = new NextActionResponse();
@@ -44,6 +47,39 @@ public class NextActionService {
         // 1. Active Treatment Plan
         Optional<TreatmentPlanDto> activePlanOpt = treatmentPlanService.getActivePlanDtoByPatient(patientId);
         activePlanOpt.ifPresent(response::setActivePlan);
+
+        // Check appointment booking & completion status for follow-up
+        List<com.app.appointment.entity.Appointment> appointments = appointmentRepository.findByPatientIdOrderByAppointmentDateDesc(patientId);
+        boolean hasCompletedFollowUp = false;
+        boolean hasBookedFollowUp = false;
+        com.app.appointment.entity.Appointment relevantAppt = null;
+
+        if (activePlanOpt.isPresent()) {
+            TreatmentPlanDto plan = activePlanOpt.get();
+            for (com.app.appointment.entity.Appointment a : appointments) {
+                if (plan.getDoctorId() != null && plan.getDoctorId().equals(a.getDoctor().getId())) {
+                    if (a.getAppointmentDate() != null && plan.getStartDate() != null && !a.getAppointmentDate().isBefore(plan.getStartDate())) {
+                        relevantAppt = a;
+                        if (a.getStatus() == com.app.appointment.entity.AppointmentStatus.COMPLETED) {
+                            hasCompletedFollowUp = true;
+                            break;
+                        } else if (a.getStatus() == com.app.appointment.entity.AppointmentStatus.CONFIRMED ||
+                                   a.getStatus() == com.app.appointment.entity.AppointmentStatus.PENDING ||
+                                   a.getStatus() == com.app.appointment.entity.AppointmentStatus.IN_PROGRESS) {
+                            hasBookedFollowUp = true;
+                        }
+                    }
+                }
+            }
+
+            if (relevantAppt != null) {
+                response.setFollowUpAppointmentStatus(relevantAppt.getStatus().name());
+                response.setFollowUpAppointmentDate(relevantAppt.getAppointmentDate());
+                response.setFollowUpAppointmentTime(relevantAppt.getTimeSlot());
+            }
+            response.setFollowUpBooked(hasBookedFollowUp);
+            response.setFollowUpCompleted(hasCompletedFollowUp);
+        }
 
         // 2. Today's Medication Doses
         List<MedicationDoseLog> todayLogs = doseLogRepository.findByPatientIdAndDoseDate(patientId, today);
@@ -75,13 +111,38 @@ public class NextActionService {
         response.setTakenDosesToday(takenToday);
         response.setTotalDosesToday(todayDoseDtos.size());
 
-        // 3. Today's Care Tasks
+        // 3. Today's Care Tasks with verified status synchronization
         List<CareTask> todayTasks = careTaskRepository.findByPatientIdAndDueDate(patientId, today);
+        for (CareTask t : todayTasks) {
+            if ("FOLLOW_UP_CONSULTATION".equalsIgnoreCase(t.getTaskType())) {
+                if (hasCompletedFollowUp && !"COMPLETED".equals(t.getStatus())) {
+                    t.setStatus("COMPLETED");
+                    careTaskRepository.save(t);
+                } else if (!hasCompletedFollowUp && "COMPLETED".equals(t.getStatus())) {
+                    // Reset erroneously manually checked follow-ups
+                    t.setStatus("PENDING");
+                    t.setCompletedAt(null);
+                    careTaskRepository.save(t);
+                }
+            }
+        }
         response.setTodayTasks(todayTasks.stream().map(this::toTaskDto).collect(Collectors.toList()));
 
         // 4. Next/Upcoming Care Tasks (due tomorrow through next 14 days)
         List<CareTask> upcomingTasks = careTaskRepository.findByPatientIdAndDueDateBetweenOrderByDueDateAsc(
                 patientId, today.plusDays(1), today.plusDays(14));
+        for (CareTask t : upcomingTasks) {
+            if ("FOLLOW_UP_CONSULTATION".equalsIgnoreCase(t.getTaskType())) {
+                if (hasCompletedFollowUp && !"COMPLETED".equals(t.getStatus())) {
+                    t.setStatus("COMPLETED");
+                    careTaskRepository.save(t);
+                } else if (!hasCompletedFollowUp && "COMPLETED".equals(t.getStatus())) {
+                    t.setStatus("PENDING");
+                    t.setCompletedAt(null);
+                    careTaskRepository.save(t);
+                }
+            }
+        }
         response.setNextTasks(upcomingTasks.stream().map(this::toTaskDto).collect(Collectors.toList()));
 
         // 5. Pending Lab Tests

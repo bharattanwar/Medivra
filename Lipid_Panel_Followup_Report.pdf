@@ -1,0 +1,82 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1492 >>
+stream
+BT
+/F1 16 Tf
+50 740 Td
+(MEDIVRA HEALTHCARE - DIAGNOSTIC REPORT) Tj
+0 -22 Td
+/F1 11 Tf
+(MEDIVRA ADVANCED CLINICAL DIAGNOSTICS LABORATORY) Tj
+0 -18 Td
+/F2 9 Tf
+(Patient Name: Test Patient    Date: 2026-09-28    Sample ID: LAB-82194) Tj
+0 -14 Td
+(Age/Gender: 45 Y / Male          Referred By: Dr. Rajesh Sharma) Tj
+0 -24 Td
+/F1 11 Tf
+(LIPID PROFILE / CHOLESTEROL PANEL) Tj
+0 -16 Td
+/F1 9 Tf
+(TEST PARAMETER              RESULT    UNIT     REFERENCE INTERVAL   STATUS) Tj
+0 -14 Td
+/F2 9 Tf
+(Total Cholesterol          185       mg/dL    < 200 mg/dL          NORMAL) Tj
+0 -14 Td
+(Triglycerides              138       mg/dL    < 150 mg/dL          NORMAL) Tj
+0 -14 Td
+(HDL Cholesterol            46        mg/dL    > 40 mg/dL           NORMAL) Tj
+0 -14 Td
+(LDL Cholesterol            111       mg/dL    < 100 mg/dL          NORMAL) Tj
+0 -14 Td
+(VLDL Cholesterol           28        mg/dL    < 30 mg/dL           NORMAL) Tj
+0 -14 Td
+(Chol / HDL Ratio           4.0       ratio    < 5.0                NORMAL) Tj
+0 -14 Td
+0 -18 Td
+/F1 10 Tf
+(CLINICAL IMPRESSION & INTERPRETATION:) Tj
+0 -14 Td
+/F2 8.5 Tf
+(- Remarkable clinical recovery: Total Cholesterol decreased from 248 to 185 mg/dL (normalized).) Tj
+0 -12 Td
+(- Triglycerides normalized (< 150 mg/dL) and HDL improved to protective levels (46 mg/dL).) Tj
+0 -12 Td
+(- Favorable response to current therapeutic regimen and lifestyle adherence.) Tj
+0 -12 Td
+0 -22 Td
+/F2 8 Tf
+(Verified by: Dr. A. K. Verma, MD Pathology - Medivra Diagnostics) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000001795 00000 n 
+0000001870 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1938
+%%EOF

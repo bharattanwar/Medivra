@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface LabReportParameterRepository extends JpaRepository<LabReportParameter, UUID> {
     List<LabReportParameter> findByPatientIdOrderByTestDateDesc(UUID patientId);
     List<LabReportParameter> findByReportId(UUID reportId);
+    void deleteByReportId(UUID reportId);
     List<LabReportParameter> findByPatientIdAndParameterNameOrderByTestDateAsc(UUID patientId, String parameterName);
 
     @Query("SELECT DISTINCT p.parameterName FROM LabReportParameter p WHERE p.patientId = :patientId")
