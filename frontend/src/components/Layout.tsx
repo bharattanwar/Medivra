@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useWebSocket } from '../context/WebSocketContext';
 import NotificationBell from './NotificationBell';
 import PreJoinCallModal, { type PreJoinAppointmentInfo } from './PreJoinCallModal';
+import MedicationReminderPopup from './MedicationReminderPopup';
 import {
   X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall, Menu,
   LayoutDashboard, ShoppingCart, Users, ShieldAlert, Clock, Stethoscope, LogIn, UserPlus, Building2, Activity
@@ -311,6 +312,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         onClose={() => setIsPreJoinOpen(false)}
         appointment={preJoinApt}
       />
+
+      {/* Global Medication Dose Reminder Popup (Patients only) */}
+      <MedicationReminderPopup />
 
       {/* Real-Time Toast Popup Container */}
       <div className="fixed top-20 right-4 sm:right-6 left-4 sm:left-auto z-50 flex flex-col gap-3 pointer-events-none w-auto sm:w-88 max-w-[calc(100vw-2rem)]">
