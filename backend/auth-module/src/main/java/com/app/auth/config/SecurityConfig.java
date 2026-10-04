@@ -51,6 +51,11 @@ public class SecurityConfig {
                 "http://localhost:5174",
                 "http://localhost:3000",
                 "http://localhost:8081",
+                "https://localhost",
+                "http://localhost",
+                "capacitor://localhost",
+                "http://10.0.2.2",
+                "http://10.0.2.2:8080",
                 "https://medivra.in",
                 "https://www.medivra.in"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));

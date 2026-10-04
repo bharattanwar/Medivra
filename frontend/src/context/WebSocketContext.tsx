@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, useCallb
 import type { ReactNode } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import api from '../services/api';
+import api, { getWsURL } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -131,7 +131,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     fetchNotifications();
 
     const stompClient = new Client({
-      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
+      webSocketFactory: () => new SockJS(getWsURL()),
       reconnectDelay: 5000,
       connectHeaders: {
         Authorization: `Bearer ${token}`

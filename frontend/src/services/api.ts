@@ -7,8 +7,43 @@ import axios from 'axios';
  * - Request: Attaches JWT Bearer token from localStorage to every outgoing API request.
  * - Response: Propagates backend errors or handles auth expiration.
  */
+export const getBaseURL = () => {
+  // If running inside native Capacitor on Android
+  if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && !envUrl.includes('medivra.in')) {
+      return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/$/, '')}/api`;
+    }
+    return 'http://10.0.2.2:8080/api';
+  }
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/$/, '')}/api`;
+  }
+  return '/api';
+};
+
+export const getWsURL = () => {
+  // If running inside native Capacitor on Android
+  if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && !envUrl.includes('medivra.in')) {
+      const origin = envUrl.replace(/\/api\/?$/, '').replace(/\/$/, '');
+      return `${origin}/ws`;
+    }
+    return 'http://10.0.2.2:8080/ws';
+  }
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    const origin = envUrl.replace(/\/api\/?$/, '').replace(/\/$/, '');
+    return `${origin}/ws`;
+  }
+  return '/ws';
+};
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },

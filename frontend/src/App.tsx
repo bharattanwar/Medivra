@@ -27,9 +27,25 @@ import ReportExplainer from './pages/ReportExplainer';
 import SmartBooking from './pages/SmartBooking';
 import PrescriptionScanner from './pages/PrescriptionScanner';
 
+import { useEffect } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { WebSocketProvider } from './context/WebSocketContext';
 
 function App() {
+  useEffect(() => {
+    const handleBackButton = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack && window.history.length > 1) {
+        window.history.back();
+      } else {
+        CapacitorApp.exitApp();
+      }
+    });
+
+    return () => {
+      handleBackButton.then(listener => listener.remove());
+    };
+  }, []);
+
   return (
     <WebSocketProvider>
       <Router>

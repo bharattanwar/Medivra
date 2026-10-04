@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Pill, Check, X, Clock, Sparkles, Bell, ChevronRight } from 'lucide-react';
 import { journeyService, type MedicationDoseLog } from '../services/journey';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,31 @@ const MedicationReminderPopup: React.FC = () => {
         setTotalPending(pending.length);
         setIsVisible(true);
         setIsAnimatingOut(false);
+
+        // Native Android Notification Trigger if on mobile
+        if (Capacitor.isNativePlatform()) {
+          try {
+            const perm = await LocalNotifications.checkPermissions();
+            if (perm.display !== 'granted') {
+              await LocalNotifications.requestPermissions();
+            }
+            const medNames = pending.map((d) => d.medicineName).join(', ');
+            await LocalNotifications.schedule({
+              notifications: [
+                {
+                  id: Math.floor(Date.now() % 100000),
+                  title: `💊 Medication Reminder (${SLOT_CONFIG[currentSlot]?.label || currentSlot})`,
+                  body: `You have ${pending.length} pending dose(s): ${medNames}`,
+                  schedule: { at: new Date(Date.now() + 500) },
+                  smallIcon: 'ic_stat_icon_config_sample',
+                  iconColor: '#0d9488',
+                },
+              ],
+            });
+          } catch (e) {
+            console.debug('[LocalNotifications] Native push error:', e);
+          }
+        }
       }
     } catch (err) {
       // Silently ignore — this is a background check, should never disrupt UX
