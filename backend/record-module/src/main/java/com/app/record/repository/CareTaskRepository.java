@@ -23,4 +23,7 @@ public interface CareTaskRepository extends JpaRepository<CareTask, UUID> {
 
     @Query("SELECT COUNT(t) FROM CareTask t WHERE t.patientId = :patientId AND t.status = 'PENDING'")
     long countPendingByPatientId(@Param("patientId") UUID patientId);
+
+    @Query("SELECT t FROM CareTask t WHERE t.patientId = :patientId AND ((t.dueDate = :today) OR (t.dueDate < :today AND t.status = 'PENDING')) ORDER BY t.dueDate ASC")
+    List<CareTask> findActiveTasksForTodayOrOverdue(@Param("patientId") UUID patientId, @Param("today") LocalDate today);
 }

@@ -307,6 +307,22 @@ const MyAppointments: React.FC = () => {
                         )}
                       </div>
                     )}
+                    {apt.status === 'COMPLETED' && (
+                      <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                        <button
+                          onClick={() => handleViewPrescription(apt.id)}
+                          className="flex-1 md:flex-initial bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-xl font-bold hover:bg-indigo-100 transition-all text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                        >
+                          📄 View Prescription
+                        </button>
+                        <button
+                          onClick={() => navigate('/patient/journey')}
+                          className="flex-1 md:flex-initial bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-xl font-bold hover:bg-emerald-100 transition-all text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                        >
+                          🌿 View Health Journey
+                        </button>
+                      </div>
+                    )}
                     {apt.status === 'PENDING_RESCHEDULE' && (
                       <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
                         {apt.cancelledBy !== patientUserId ? (

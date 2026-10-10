@@ -57,17 +57,19 @@ public class NextActionService {
         if (activePlanOpt.isPresent()) {
             TreatmentPlanDto plan = activePlanOpt.get();
             for (com.app.appointment.entity.Appointment a : appointments) {
+                // Skip the originating consultation that generated this plan
+                if (plan.getAppointmentId() != null && plan.getAppointmentId().equals(a.getId())) {
+                    continue;
+                }
                 if (plan.getDoctorId() != null && plan.getDoctorId().equals(a.getDoctor().getId())) {
-                    if (a.getAppointmentDate() != null && plan.getStartDate() != null && !a.getAppointmentDate().isBefore(plan.getStartDate())) {
-                        relevantAppt = a;
-                        if (a.getStatus() == com.app.appointment.entity.AppointmentStatus.COMPLETED) {
-                            hasCompletedFollowUp = true;
-                            break;
-                        } else if (a.getStatus() == com.app.appointment.entity.AppointmentStatus.CONFIRMED ||
-                                   a.getStatus() == com.app.appointment.entity.AppointmentStatus.PENDING ||
-                                   a.getStatus() == com.app.appointment.entity.AppointmentStatus.IN_PROGRESS) {
-                            hasBookedFollowUp = true;
-                        }
+                    relevantAppt = a;
+                    if (a.getStatus() == com.app.appointment.entity.AppointmentStatus.COMPLETED) {
+                        hasCompletedFollowUp = true;
+                        break;
+                    } else if (a.getStatus() == com.app.appointment.entity.AppointmentStatus.CONFIRMED ||
+                               a.getStatus() == com.app.appointment.entity.AppointmentStatus.PENDING ||
+                               a.getStatus() == com.app.appointment.entity.AppointmentStatus.IN_PROGRESS) {
+                        hasBookedFollowUp = true;
                     }
                 }
             }
@@ -111,15 +113,15 @@ public class NextActionService {
         response.setTakenDosesToday(takenToday);
         response.setTotalDosesToday(todayDoseDtos.size());
 
-        // 3. Today's Care Tasks with verified status synchronization
-        List<CareTask> todayTasks = careTaskRepository.findByPatientIdAndDueDate(patientId, today);
+        // 3. Active & Overdue Care Tasks with verified status synchronization (never vanish)
+        List<CareTask> todayTasks = careTaskRepository.findActiveTasksForTodayOrOverdue(patientId, today);
         for (CareTask t : todayTasks) {
             if ("FOLLOW_UP_CONSULTATION".equalsIgnoreCase(t.getTaskType())) {
                 if (hasCompletedFollowUp && !"COMPLETED".equals(t.getStatus())) {
                     t.setStatus("COMPLETED");
                     careTaskRepository.save(t);
                 } else if (!hasCompletedFollowUp && "COMPLETED".equals(t.getStatus())) {
-                    // Reset erroneously manually checked follow-ups
+                    // Reset if prematurely completed by initial consultation
                     t.setStatus("PENDING");
                     t.setCompletedAt(null);
                     careTaskRepository.save(t);

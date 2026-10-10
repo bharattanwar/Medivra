@@ -12,6 +12,7 @@ import {
   type HealthTimelineEvent, 
   type AiContextResponse
 } from '../services/journey';
+import api from '../services/api';
 
 export default function HealthJourneyDashboard() {
   const navigate = useNavigate();
@@ -99,6 +100,50 @@ export default function HealthJourneyDashboard() {
     }
   };
 
+  const handleViewPrescription = async (appointmentId: string) => {
+    try {
+      const response = await api.get(`/records/appointment/${appointmentId}`);
+      if (response.data && response.data.filePath) {
+        const { filePath } = response.data;
+        const fileResponse = await api.get(`/records/view/${filePath}`, {
+          responseType: 'blob'
+        });
+        const fileURL = URL.createObjectURL(fileResponse.data);
+        window.open(fileURL, '_blank');
+        setTimeout(() => URL.revokeObjectURL(fileURL), 1000 * 60);
+      } else {
+        alert('No prescription found for this appointment.');
+      }
+    } catch (error) {
+      console.error('Error fetching prescription:', error);
+      alert('Could not retrieve prescription.');
+    }
+  };
+
+  const handleViewFile = async (actionUrl?: string) => {
+    if (!actionUrl) return;
+    try {
+      if (actionUrl.startsWith('/api/records/view/')) {
+        const filePath = actionUrl.replace('/api/records/view/', '');
+        const fileResponse = await api.get(`/records/view/${filePath}`, {
+          responseType: 'blob'
+        });
+        const fileURL = URL.createObjectURL(fileResponse.data);
+        window.open(fileURL, '_blank');
+        setTimeout(() => URL.revokeObjectURL(fileURL), 1000 * 60);
+      } else if (actionUrl.startsWith('/consultation/')) {
+        navigate('/patient/appointments');
+      } else if (actionUrl.startsWith('/patient/')) {
+        navigate(actionUrl);
+      } else {
+        window.open(actionUrl, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to open document', err);
+      alert('Could not open document.');
+    }
+  };
+
   const activePlan = nextActions?.activePlan;
 
   if (loading) {
@@ -152,11 +197,19 @@ export default function HealthJourneyDashboard() {
               </p>
             </div>
 
-            {/* AI Assistant Quick Trigger */}
-            <div className="flex items-center gap-3 w-full md:w-auto">
+            {/* AI Assistant Quick Trigger & View Prescription */}
+            <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+              {activePlan?.appointmentId && (
+                <button
+                  onClick={() => handleViewPrescription(activePlan.appointmentId!)}
+                  className="w-full md:w-auto bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-3 rounded-2xl font-bold text-xs backdrop-blur-sm flex items-center justify-center gap-2 transition-all duration-200 active:scale-95 cursor-pointer"
+                >
+                  <FileText className="h-4 w-4" /> View Prescription
+                </button>
+              )}
               <button
                 onClick={() => setAiDrawerOpen(true)}
-                className="w-full md:w-auto bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-5 py-3 rounded-2xl font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all duration-200 active:scale-95"
+                className="w-full md:w-auto bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-5 py-3 rounded-2xl font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all duration-200 active:scale-95 cursor-pointer"
               >
                 <Bot className="h-4 w-4" /> Ask Health Navigator
               </button>
@@ -435,22 +488,49 @@ export default function HealthJourneyDashboard() {
                     </button>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 shadow-sm">
+                  <div className={`p-4 rounded-2xl ${
+                    new Date(activePlan.followUpDate) < new Date(new Date().setHours(0,0,0,0))
+                      ? 'bg-amber-50/80 border-amber-200' 
+                      : 'bg-blue-50/70 border-blue-200'
+                  } border shadow-sm`}>
                     <div className="flex items-center gap-2.5 mb-2">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                      <div className={`w-8 h-8 rounded-xl ${
+                        new Date(activePlan.followUpDate) < new Date(new Date().setHours(0,0,0,0))
+                          ? 'bg-amber-600'
+                          : 'bg-blue-600'
+                      } text-white flex items-center justify-center`}>
                         <Stethoscope className="h-4 w-4" />
                       </div>
                       <div>
-                        <h4 className="font-bold text-sm text-slate-900">Review Consultation</h4>
-                        <p className="text-xs text-blue-900/70">Recommended Target: {activePlan.followUpDate}</p>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-900">Review Consultation</h4>
+                          {new Date(activePlan.followUpDate) < new Date(new Date().setHours(0,0,0,0)) && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full">
+                              Overdue
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs ${
+                          new Date(activePlan.followUpDate) < new Date(new Date().setHours(0,0,0,0))
+                            ? 'text-amber-800 font-medium'
+                            : 'text-blue-900/70'
+                        }`}>
+                          Target Date: {activePlan.followUpDate}
+                        </p>
                       </div>
                     </div>
                     <p className="text-xs text-slate-600 mt-1 mb-3">
-                      Schedule review with <strong>{activePlan.doctorName || "your doctor"}</strong> to evaluate treatment progress.
+                      {new Date(activePlan.followUpDate) < new Date(new Date().setHours(0,0,0,0))
+                        ? `Target review date (${activePlan.followUpDate}) has elapsed. You can still schedule your review with ${activePlan.doctorName || "your doctor"} anytime.`
+                        : `Schedule review with ${activePlan.doctorName || "your doctor"} to evaluate treatment progress.`}
                     </p>
                     <button
                       onClick={() => navigate('/patient/dashboard')}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                      className={`w-full py-2 ${
+                        new Date(activePlan.followUpDate) < new Date(new Date().setHours(0,0,0,0))
+                          ? 'bg-amber-600 hover:bg-amber-700'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      } text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer`}
                     >
                       Schedule Review <ArrowRight className="h-3 w-3" />
                     </button>
@@ -717,6 +797,16 @@ export default function HealthJourneyDashboard() {
                         <h4 className="font-bold text-slate-900 text-xs">{item.title}</h4>
                         {item.subtitle && <p className="text-[11px] text-slate-600 font-medium mt-0.5">{item.subtitle}</p>}
                         {item.description && <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">{item.description}</p>}
+                        {item.actionUrl && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-end">
+                            <button
+                              onClick={() => handleViewFile(item.actionUrl)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              {item.eventType === 'PRESCRIPTION' ? '📄 View Prescription' : '👁️ View Details'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

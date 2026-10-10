@@ -49,7 +49,7 @@ public class HealthJourneyController {
         Map<String, Object> response = new HashMap<>();
         response.put("nextActions", nextActions);
         response.put("labTrends", labTrends);
-        response.put("recentTimeline", timeline.size() > 5 ? timeline.subList(0, 5) : timeline);
+        response.put("recentTimeline", timeline.size() > 25 ? timeline.subList(0, 25) : timeline);
         response.put("treatmentPlans", allPlans);
 
         return ResponseEntity.ok(response);

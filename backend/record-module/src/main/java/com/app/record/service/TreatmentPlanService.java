@@ -251,6 +251,15 @@ public class TreatmentPlanService {
                 .collect(Collectors.toList());
 
         for (CareTask t : tasks) {
+            if (t.getTreatmentPlanId() != null) {
+                var planOpt = treatmentPlanRepository.findById(t.getTreatmentPlanId());
+                if (planOpt.isPresent() && event.getAppointmentId().equals(planOpt.get().getAppointmentId())) {
+                    log.info("Skipping task {} because appointment {} is the initial consultation for plan {}",
+                            t.getId(), event.getAppointmentId(), planOpt.get().getId());
+                    continue;
+                }
+            }
+
             t.setStatus("COMPLETED");
             t.setCompletedAt(LocalDateTime.now());
             t.setReferenceId(event.getAppointmentId());
