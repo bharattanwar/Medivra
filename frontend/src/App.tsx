@@ -24,7 +24,6 @@ import EmergencySOS from './pages/EmergencySOS';
 import AmbulanceDashboard from './pages/AmbulanceDashboard';
 import HospitalEmergencyDashboard from './pages/HospitalEmergencyDashboard';
 import ReportExplainer from './pages/ReportExplainer';
-import SmartBooking from './pages/SmartBooking';
 import PrescriptionScanner from './pages/PrescriptionScanner';
 
 import { useEffect } from 'react';
@@ -65,7 +64,7 @@ function App() {
             
             {/* AI Routes */}
             <Route path="/patient/ai/reports" element={<PrivateRoute allowedRoles={['patient']}><ReportExplainer /></PrivateRoute>} />
-            <Route path="/patient/ai/booking" element={<PrivateRoute allowedRoles={['patient']}><SmartBooking /></PrivateRoute>} />
+            <Route path="/patient/ai/booking" element={<PrivateRoute allowedRoles={['patient']}><PatientDashboard initialTab="triage" /></PrivateRoute>} />
             <Route path="/patient/ai/prescriptions" element={<PrivateRoute allowedRoles={['patient']}><PrescriptionScanner /></PrivateRoute>} />
 
             <Route path="/doctor/availability" element={<PrivateRoute allowedRoles={['doctor']}><ManageAvailability /></PrivateRoute>} />

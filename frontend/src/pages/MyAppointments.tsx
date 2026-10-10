@@ -175,12 +175,12 @@ const MyAppointments: React.FC = () => {
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Appointments</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900">Appointment History</h1>
             <p className="text-gray-500 mt-1">Manage your upcoming and past medical consultations.</p>
           </div>
           <button
             onClick={fetchAppointments}
-            className="p-2.5 bg-white rounded-full border border-gray-200 hover:bg-gray-50 shadow-sm transition-all"
+            className="p-2.5 bg-white rounded-full border border-gray-200 hover:bg-gray-50 shadow-sm transition-all cursor-pointer"
             title="Refresh"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -333,8 +333,8 @@ const MyAppointments: React.FC = () => {
                     )}
                     {(apt.status === 'CANCELLED' || apt.status === 'REJECTED') && (
                       <button
-                        onClick={() => navigate('/patient/dashboard')}
-                        className="flex-1 md:flex-initial bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 px-4 py-2 rounded-xl font-bold text-xs transition-all"
+                        onClick={() => navigate('/patient/doctors')}
+                        className="flex-1 md:flex-initial bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer"
                       >
                         🔄 Rebook Consultation
                       </button>
@@ -367,8 +367,8 @@ const MyAppointments: React.FC = () => {
             <h3 className="text-xl font-bold text-gray-900">No appointments yet</h3>
             <p className="text-gray-500 mt-2">You haven't booked any medical consultations yet.</p>
             <button
-              onClick={() => navigate('/patient/dashboard')}
-              className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md"
+              onClick={() => navigate('/patient/doctors')}
+              className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md cursor-pointer"
             >
               Book Now
             </button>

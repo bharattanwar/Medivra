@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, MapPin, Stethoscope, User } from 'lucide-react';
 import api from '../services/api';
 import DoctorCard from '../components/DoctorCard';
 import BookingModal from '../components/BookingModal';
+import SmartBooking from './SmartBooking';
 
 interface Doctor {
   id: string;
@@ -19,7 +21,27 @@ interface Doctor {
   availableVideo?: boolean;
 }
 
-const PatientDashboard: React.FC = () => {
+interface PatientDashboardProps {
+  initialTab?: 'browse' | 'triage';
+}
+
+const PatientDashboard: React.FC<PatientDashboardProps> = ({ initialTab }) => {
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<'browse' | 'triage'>(() => {
+    if (initialTab) return initialTab;
+    if ((location.state as any)?.activeTab) return (location.state as any).activeTab;
+    if (location.pathname.includes('/ai/booking')) return 'triage';
+    return 'browse';
+  });
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    } else if ((location.state as any)?.activeTab) {
+      setActiveTab((location.state as any).activeTab);
+    }
+  }, [initialTab, location.state]);
+
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [nameSearch, setNameSearch] = useState('');
@@ -122,122 +144,161 @@ const PatientDashboard: React.FC = () => {
       )}
 
       <section className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 text-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3">Find Your Doctor</h1>
-          <p className="text-blue-100 text-base sm:text-lg max-w-2xl mx-auto mb-8">
-            Book appointments with trusted specialists. Search by name, specialty, or city.
+          <p className="text-blue-100 text-base sm:text-lg max-w-2xl mx-auto mb-6">
+            Book appointments with trusted specialists or use AI Triage to match symptoms.
           </p>
 
-          <form
-            onSubmit={handleSearch}
-            className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-4 sm:p-5"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Doctor name"
-                  value={nameSearch}
-                  onChange={(e) => setNameSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
+          {/* Tab Switcher */}
+          <div className="inline-flex p-1.5 bg-blue-900/60 backdrop-blur rounded-2xl mb-8 border border-white/10 shadow-lg">
+            <button
+              type="button"
+              onClick={() => setActiveTab('browse')}
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                activeTab === 'browse'
+                  ? 'bg-white text-blue-700 shadow-md'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              Browse Doctors
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('triage')}
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                activeTab === 'triage'
+                  ? 'bg-white text-blue-700 shadow-md'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              AI Triage & Booking
+            </button>
+          </div>
+
+          {activeTab === 'browse' && (
+            <form
+              onSubmit={handleSearch}
+              className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-4 sm:p-5"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Doctor name"
+                    value={nameSearch}
+                    onChange={(e) => setNameSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <div className="relative">
+                  <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Specialization"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-semibold transition-colors shadow-md cursor-pointer"
+                >
+                  <Search className="h-5 w-5" />
+                  Search
+                </button>
               </div>
-              <div className="relative">
-                <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Specialization"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-              </div>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="City"
-                  value={citySearch}
-                  onChange={(e) => setCitySearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-semibold transition-colors shadow-md"
-              >
-                <Search className="h-5 w-5" />
-                Search
-              </button>
-            </div>
-          </form>
+            </form>
+          )}
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-8">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">
-            Filter by specialty
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {specializations.map((spec) => (
-              <button
-                key={spec}
-                type="button"
-                onClick={() => handleSpecializationClick(spec)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                  selectedSpecialization === spec
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700'
-                }`}
-              >
-                {spec}
-              </button>
-            ))}
-          </div>
+      {activeTab === 'triage' ? (
+        <div className="animate-fade-in">
+          <SmartBooking
+            onBookingSuccess={() => {
+              setActiveTab('browse');
+              fetchDoctors();
+            }}
+          />
         </div>
-
-        {loading ? (
-          <div className="flex justify-center py-24">
-            <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : doctors.length > 0 ? (
-          <>
-            <p className="text-sm text-slate-500 mb-4">
-              Showing <span className="font-semibold text-slate-800">{doctors.length}</span> doctors
+      ) : (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-8">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">
+              Filter by specialty
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {doctors.map((doctor) => (
-                <DoctorCard
-                  key={doctor.id}
-                  doctor={doctor}
-                  onBookNow={(doc) => setBookingDoctor({ ...doc, hospitalName: doc.hospitalName ?? '', city: doc.city ?? '' })}
-                />
+            <div className="flex flex-wrap gap-2">
+              {specializations.map((spec) => (
+                <button
+                  key={spec}
+                  type="button"
+                  onClick={() => handleSpecializationClick(spec)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+                    selectedSpecialization === spec
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  {spec}
+                </button>
               ))}
             </div>
-          </>
-        ) : (
-          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
-            <Search className="h-14 w-14 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-slate-900 mb-2">No doctors found</h3>
-            <p className="text-slate-500 mb-6">Try different filters or clear your search.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchTerm('');
-                setNameSearch('');
-                setCitySearch('');
-                setSelectedSpecialization('All');
-                fetchDoctors();
-              }}
-              className="text-blue-600 font-semibold hover:text-blue-700"
-            >
-              Clear all filters
-            </button>
           </div>
-        )}
-      </div>
+
+          {loading ? (
+            <div className="flex justify-center py-24">
+              <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : doctors.length > 0 ? (
+            <>
+              <p className="text-sm text-slate-500 mb-4">
+                Showing <span className="font-semibold text-slate-800">{doctors.length}</span> doctors
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {doctors.map((doctor) => (
+                  <DoctorCard
+                    key={doctor.id}
+                    doctor={doctor}
+                    onBookNow={(doc) => setBookingDoctor({ ...doc, hospitalName: doc.hospitalName ?? '', city: doc.city ?? '' })}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
+              <Search className="h-14 w-14 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-slate-900 mb-2">No doctors found</h3>
+              <p className="text-slate-500 mb-6">Try different filters or clear your search.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setNameSearch('');
+                  setCitySearch('');
+                  setSelectedSpecialization('All');
+                  fetchDoctors();
+                }}
+                className="text-blue-600 font-semibold hover:text-blue-700 cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

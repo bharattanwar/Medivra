@@ -5,8 +5,7 @@ import NotificationBell from './NotificationBell';
 import PreJoinCallModal, { type PreJoinAppointmentInfo } from './PreJoinCallModal';
 import MedicationReminderPopup from './MedicationReminderPopup';
 import {
-  X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall, Menu,
-  LayoutDashboard, ShoppingCart, Users, ShieldAlert, Clock, Stethoscope, LogIn, UserPlus, Building2, Activity
+  X, Calendar, CreditCard, FileText, Sparkles, Video, PhoneCall, Menu
 } from 'lucide-react';
 
 /** Returns true if a JWT token string is expired (or unparseable). */
@@ -61,14 +60,21 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     window.location.replace('/login');
   };
 
+  const isPathActive = (path: string) => {
+    if (location.pathname === path) return true;
+    if (path === '/patient/pharmacy' && location.pathname === '/patient/orders') return true;
+    if (path === '/patient/doctors' && location.pathname === '/patient/ai/booking') return true;
+    return false;
+  };
+
   const navLinkClass = (path: string) =>
-    `flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all whitespace-nowrap ${location.pathname === path
+    `flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs xl:text-sm font-semibold transition-all whitespace-nowrap ${isPathActive(path)
       ? 'bg-blue-600 text-white shadow-sm'
       : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
     }`;
 
   const mobileNavLinkClass = (path: string) =>
-    `flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${location.pathname === path
+    `flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${isPathActive(path)
       ? 'bg-blue-600 text-white shadow-sm font-bold'
       : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700 bg-slate-50/60'
     }`;
@@ -94,7 +100,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             onClick={() => setIsMobileMenuOpen(false)}
             className={linkClass('/login')}
           >
-            <LogIn className="w-4 h-4 shrink-0" />
             <span>Log In</span>
           </Link>
           <Link
@@ -102,7 +107,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             onClick={() => setIsMobileMenuOpen(false)}
             className={linkClass('/signup')}
           >
-            <UserPlus className="w-4 h-4 shrink-0" />
             <span>Sign Up</span>
           </Link>
           <Link
@@ -110,7 +114,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             onClick={() => setIsMobileMenuOpen(false)}
             className={linkClass('/pharmacy/register')}
           >
-            <Building2 className="w-4 h-4 shrink-0" />
             <span>Pharmacy Partner</span>
           </Link>
         </>
@@ -121,23 +124,18 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/admin/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/dashboard')}>
-            <LayoutDashboard className="w-4 h-4 shrink-0" />
             <span>Dashboard</span>
           </Link>
           <Link to="/admin/users" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/users')}>
-            <Users className="w-4 h-4 shrink-0" />
             <span>Users</span>
           </Link>
           <Link to="/admin/doctors" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/doctors')}>
-            <Stethoscope className="w-4 h-4 shrink-0" />
             <span>Doctors Approval</span>
           </Link>
           <Link to="/admin/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/admin/appointments')}>
-            <Calendar className="w-4 h-4 shrink-0" />
             <span>Appointments/Payments</span>
           </Link>
           <Link to="/hospital/emergencies" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/hospital/emergencies')}>
-            <ShieldAlert className="w-4 h-4 shrink-0 text-red-500" />
             <span>Emergency Ops</span>
           </Link>
         </>
@@ -148,7 +146,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/pharmacy/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/pharmacy/dashboard')}>
-            <LayoutDashboard className="w-4 h-4 shrink-0" />
             <span>Inventory</span>
           </Link>
         </>
@@ -159,15 +156,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/dashboard')}>
-            <LayoutDashboard className="w-4 h-4 shrink-0" />
             <span>Dashboard</span>
           </Link>
           <Link to="/doctor/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/doctor/appointments')}>
-            <Calendar className="w-4 h-4 shrink-0" />
             <span>Appointments</span>
           </Link>
           <Link to="/doctor/availability" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/doctor/availability')}>
-            <Clock className="w-4 h-4 shrink-0" />
             <span>Schedule</span>
           </Link>
         </>
@@ -178,31 +172,21 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       return (
         <>
           <Link to="/patient/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/dashboard')}>
-            <Activity className="w-4 h-4 shrink-0 text-emerald-400" />
             <span className="font-bold">Health Journey</span>
           </Link>
           <Link to="/patient/doctors" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/doctors')}>
-            <Stethoscope className="w-4 h-4 shrink-0" />
             <span>Find Doctors</span>
           </Link>
           <Link to="/patient/appointments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/appointments')}>
-            <Calendar className="w-4 h-4 shrink-0" />
-            <span>Appointments</span>
+            <span>Appointment History</span>
           </Link>
           <Link to="/patient/ai/reports" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/ai/reports')}>
-            <FileText className="w-4 h-4 shrink-0" />
             <span>Reports</span>
           </Link>
-          <Link to="/patient/ai/booking" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/ai/booking')}>
-            <Sparkles className="w-4 h-4 shrink-0 text-amber-500" />
-            <span>AI Triage</span>
-          </Link>
           <Link to="/patient/pharmacy" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/pharmacy')}>
-            <ShoppingCart className="w-4 h-4 shrink-0" />
-            <span>Pharmacy</span>
+            <span>Orders</span>
           </Link>
           <Link to="/patient/payments" onClick={() => setIsMobileMenuOpen(false)} className={linkClass('/patient/payments')}>
-            <CreditCard className="w-4 h-4 shrink-0" />
             <span>Payments</span>
           </Link>
           <Link
@@ -216,7 +200,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 }`
             }
           >
-            <ShieldAlert className="w-4 h-4 shrink-0 text-red-500" />
             <span>🚨 SOS</span>
           </Link>
         </>

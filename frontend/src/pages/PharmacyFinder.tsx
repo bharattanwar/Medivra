@@ -1036,7 +1036,7 @@ const PharmacyFinder: React.FC = () => {
                             }}
                             className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 py-2 rounded-xl transition-colors border border-emerald-200 cursor-pointer shadow-sm"
                           >
-                            <ShoppingCart className="h-3.5 w-3.5" /> Order from here
+                            Order from here
                           </button>
                           <button
                             type="button"

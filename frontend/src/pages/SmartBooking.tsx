@@ -19,7 +19,11 @@ interface DoctorDetail {
   availableVideo?: boolean;
 }
 
-export default function SmartBooking() {
+interface SmartBookingProps {
+  onBookingSuccess?: () => void;
+}
+
+export default function SmartBooking({ onBookingSuccess }: SmartBookingProps = {}) {
   const patientId = localStorage.getItem("userId");
   const navigate = useNavigate();
   const location = useLocation();
@@ -128,6 +132,11 @@ export default function SmartBooking() {
   const handleBookingSuccess = () => {
     setBookingDoctor(null);
     setBookingSuccess(true);
+    if (onBookingSuccess) {
+      setTimeout(() => {
+        onBookingSuccess();
+      }, 1500);
+    }
   };
 
   return (
