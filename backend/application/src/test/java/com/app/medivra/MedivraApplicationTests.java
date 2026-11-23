@@ -15,7 +15,6 @@ import com.app.record.service.HealthTimelineService;
 import com.app.record.service.MedicalRecordService;
 import com.app.record.service.NextActionService;
 import com.app.record.service.TreatmentPlanService;
-import com.app.user.entity.Role;
 import com.app.user.entity.User;
 import com.app.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
