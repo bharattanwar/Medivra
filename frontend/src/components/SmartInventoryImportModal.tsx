@@ -11,8 +11,8 @@ export interface InventoryImportRow {
   medicineName: string;
   strength?: string;
   manufacturer?: string;
-  quantity?: number;
-  price?: number;
+  quantity?: number | string;
+  price?: number | string;
   expiryDate?: string;
   status: 'VALID' | 'WARNING' | 'ERROR';
   validationError?: string;
@@ -570,7 +570,10 @@ export const SmartInventoryImportModal: React.FC<SmartInventoryImportModalProps>
                                 type="number"
                                 min="1"
                                 value={row.quantity !== undefined ? row.quantity : ''}
-                                onChange={e => handleCellChange(row.rowNumber, 'quantity', parseInt(e.target.value) || 0)}
+                                onChange={e => {
+                                  const raw = e.target.value;
+                                  handleCellChange(row.rowNumber, 'quantity', raw === '' ? '' : parseInt(raw, 10));
+                                }}
                                 className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:ring-1 focus:ring-orange-500 outline-none"
                               />
                             </td>
@@ -580,7 +583,10 @@ export const SmartInventoryImportModal: React.FC<SmartInventoryImportModalProps>
                                 step="0.01"
                                 min="0.01"
                                 value={row.price !== undefined ? row.price : ''}
-                                onChange={e => handleCellChange(row.rowNumber, 'price', parseFloat(e.target.value) || 0)}
+                                onChange={e => {
+                                  const raw = e.target.value;
+                                  handleCellChange(row.rowNumber, 'price', raw === '' ? '' : parseFloat(raw));
+                                }}
                                 className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:ring-1 focus:ring-orange-500 outline-none"
                               />
                             </td>

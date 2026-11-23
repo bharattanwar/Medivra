@@ -93,7 +93,7 @@ const PrescriptionScanner: React.FC = () => {
         prefilledItems: medicines.map(m => ({
           medicineId: m.matchedMedicineId,
           medicineName: m.matchedMedicineName || m.extractedName,
-          quantity: m.quantity || 1
+          quantity: Math.max(1, Number(m.quantity) || 1)
         }))
       }
     });
@@ -304,8 +304,21 @@ const PrescriptionScanner: React.FC = () => {
                         <input
                           type="number"
                           min="1"
-                          value={med.quantity}
-                          onChange={(e) => handleUpdateMedicine(idx, 'quantity', parseInt(e.target.value) || 1)}
+                          value={med.quantity === '' ? '' : med.quantity}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              handleUpdateMedicine(idx, 'quantity', '');
+                            } else {
+                              const parsed = parseInt(val, 10);
+                              handleUpdateMedicine(idx, 'quantity', isNaN(parsed) ? '' : Math.max(1, parsed));
+                            }
+                          }}
+                          onBlur={() => {
+                            if (med.quantity === '' || Number(med.quantity) < 1) {
+                              handleUpdateMedicine(idx, 'quantity', 1);
+                            }
+                          }}
                           className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium"
                         />
                       </div>

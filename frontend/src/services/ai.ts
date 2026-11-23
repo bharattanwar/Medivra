@@ -66,7 +66,7 @@ export interface ExtractedMedicine {
   dosage: string;
   frequency: string;
   duration: string;
-  quantity: number;
+  quantity: number | string;
 }
 
 export interface PrescriptionExtractionResponse {

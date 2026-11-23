@@ -33,7 +33,7 @@ interface MedicineSuggestion {
 interface PrescriptionItem {
   medicineId: string;
   medicineName: string;
-  quantity: number;
+  quantity: number | string;
 }
 
 interface AllocatedItem {
@@ -99,7 +99,7 @@ interface IdentifiedItem {
   dosage: string;
   frequency: string;
   duration: string;
-  quantity: number;
+  quantity: number | string;
 }
 
 type Tab = 'nearby' | 'match';
@@ -545,19 +545,21 @@ const PharmacyFinder: React.FC = () => {
   const updateQty = (medicineId: string, delta: number) => {
     setBasket(prev => prev.map(item =>
       item.medicineId === medicineId
-        ? { ...item, quantity: Math.max(1, item.quantity + delta) }
+        ? { ...item, quantity: Math.max(1, (Number(item.quantity) || 0) + delta) }
         : item
     ));
     setMatchResult(null);
   };
 
-  const setExplicitQty = (medicineId: string, val: number) => {
-    const q = Math.max(1, isNaN(val) ? 1 : val);
-    setBasket(prev => prev.map(item =>
-      item.medicineId === medicineId
-        ? { ...item, quantity: q }
-        : item
-    ));
+  const setExplicitQty = (medicineId: string, val: string | number) => {
+    setBasket(prev => prev.map(item => {
+      if (item.medicineId !== medicineId) return item;
+      if (val === '' || val === null || val === undefined) {
+        return { ...item, quantity: '' };
+      }
+      const num = typeof val === 'number' ? val : parseInt(val, 10);
+      return { ...item, quantity: isNaN(num) ? '' : Math.max(1, num) };
+    }));
     setMatchResult(null);
   };
 
@@ -593,7 +595,7 @@ const PharmacyFinder: React.FC = () => {
       // Map verified quantities to the resolved IDs
       const finalBasket = resolvedList.map((m: any, idx: number) => ({
         medicineId: m.id,
-        quantity: identifiedItems[idx].quantity
+        quantity: Math.max(1, Number(identifiedItems[idx]?.quantity) || 1)
       }));
 
       // If we have an active record ID, verify the items in the backend records too
@@ -641,7 +643,7 @@ const PharmacyFinder: React.FC = () => {
         userLongitude: loc.lng,
         radiusKm: 50,
         pharmacyId: selectedPharmacyId || undefined,
-        medicines: basket.map(b => ({ medicineId: b.medicineId, quantity: b.quantity })),
+        medicines: basket.map(b => ({ medicineId: b.medicineId, quantity: Math.max(1, Number(b.quantity) || 1) })),
       });
       if (res.data.success) {
         setMatchResult(res.data.data);
@@ -1379,8 +1381,13 @@ const PharmacyFinder: React.FC = () => {
                             <input
                               type="number"
                               min="1"
-                              value={item.quantity}
-                              onChange={(e) => setExplicitQty(item.medicineId, parseInt(e.target.value))}
+                              value={item.quantity === '' ? '' : item.quantity}
+                              onChange={(e) => setExplicitQty(item.medicineId, e.target.value)}
+                              onBlur={() => {
+                                if (item.quantity === '' || Number(item.quantity) < 1) {
+                                  setExplicitQty(item.medicineId, 1);
+                                }
+                              }}
                               className="w-10 text-center text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded p-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                             <button
@@ -1459,7 +1466,7 @@ const PharmacyFinder: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 1) } : it));
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, (Number(it.quantity) || 1) - 1) } : it));
                                   }}
                                   className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
                                 >
@@ -1468,17 +1475,23 @@ const PharmacyFinder: React.FC = () => {
                                 <input
                                   type="number"
                                   min="1"
-                                  value={item.quantity}
+                                  value={item.quantity === '' ? '' : item.quantity}
                                   onChange={(e) => {
-                                    const val = Math.max(1, parseInt(e.target.value) || 1);
-                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: val } : it));
+                                    const raw = e.target.value;
+                                    const val = raw === '' ? '' : parseInt(raw, 10);
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: val === '' || isNaN(val) ? '' : Math.max(1, val) } : it));
+                                  }}
+                                  onBlur={() => {
+                                    if (item.quantity === '' || Number(item.quantity) < 1) {
+                                      setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: 1 } : it));
+                                    }
                                   }}
                                   className="w-12 text-center text-xs font-black text-slate-800 bg-white border border-slate-200 rounded-lg p-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 1 } : it));
+                                    setIdentifiedItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: (Number(it.quantity) || 0) + 1 } : it));
                                   }}
                                   className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
                                 >
